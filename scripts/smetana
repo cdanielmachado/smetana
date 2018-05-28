@@ -1,0 +1,363 @@
+#!/usr/bin/env python
+
+from __future__ import division
+from __future__ import print_function
+from past.utils import old_div
+import argparse
+import textwrap
+import os
+import glob
+from framed import load_cbmodel, Community, Environment, set_default_solver
+import pandas as pd
+from collections import OrderedDict
+from framed.community.smetana import mip_score, mro_score
+from framed.community.smetana import species_coupling_score, metabolite_production_score, metabolite_uptake_score
+from framed.experimental.medium import load_media_db
+
+SCORES = {
+    'mip',
+    'mro',
+    'scs',
+    'mus',
+    'mps',
+    'smetana'
+}
+
+
+def extract_id_from_filepath(filepath):
+    filename = os.path.basename(filepath)
+
+    if filename.endswith('.xml'):
+        organism_id = filename[:-4]
+    elif filename.endswith('.xml.gz'):
+        organism_id = filename[:-7]
+    else:
+        raise IOError('Unrecognized extension in file {}. Valid extensions are .xml and .xml.gz'.format(filename))
+
+    return organism_id
+
+
+def load_models(models, flavor, pre_filter=None):
+    model_dict = OrderedDict()
+
+    for filepath in models:
+        organism_id = extract_id_from_filepath(filepath)
+
+        if pre_filter is not None and organism_id not in pre_filter:
+            continue  # do not load models that will not be used
+
+        model = load_cbmodel(filepath, flavor=flavor)
+        model_dict[organism_id] = model
+        model.id = organism_id
+
+        if 'R_ATPM' in model.reactions:
+            model.reactions.R_ATPM.lb = 0
+
+    return model_dict
+
+
+def load_communities(filepath):
+    df = pd.read_csv(filepath, sep='\t', header=None)
+    comm_dict = OrderedDict((name, group[1].tolist()) for name, group in df.groupby(0))
+    return comm_dict
+
+
+def main(models, communities=None, scores=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
+         ext_comp_id=None, verbose=False, min_mass_weight=False, exclude=None):
+
+    # load models
+
+    if len(models) == 1 and '*' in models[0]:
+        pattern = models[0]
+        models = glob.glob(pattern)
+        if len(models) == 0:
+            print("No files found: {}".format(pattern))
+            return
+
+    if not flavor:
+        flavor = 'cobra'
+
+    # load models and communities
+
+    if communities is not None:
+        comm_dict = load_communities(communities)
+        pre_filter = {org_id for organisms in list(comm_dict.values()) for org_id in organisms}
+
+        if verbose:
+            print("Loading models...".format(len(pre_filter)))
+
+        model_dict = load_models(models, flavor, pre_filter)
+    else:
+        if verbose:
+            print("Loading models...".format(len(models)))
+
+        model_dict = load_models(models, flavor)
+        comm_dict = {'all': list(model_dict.keys())}
+
+    # load media
+
+    if media:
+        media = media.split(',')
+        media_db = load_media_db(mediadb)
+    else:
+        media = [None]
+
+    if exclude:
+        df = pd.read_csv(exclude, header=None)
+        excluded_mets = set(df[0])
+    else:
+        excluded_mets = set()
+
+    # compute scores
+
+    if scores is None:
+        scores = SCORES
+    elif 'smetana' in scores:
+        scores.update({'scs', 'mps', 'mus'})
+
+    global_data = []
+    detailed_data = []
+    mip_data = []
+    mro_data = []
+    scs_data = []
+    mps_data = []
+    mus_data = []
+    smt_data = []
+    smt_global = []
+
+    for comm_id, organisms in list(comm_dict.items()):
+
+        comm_models = [model_dict[organism_id] for organism_id in organisms]
+        community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id)
+
+        for medium in media:
+
+            if medium:
+                env = Environment.from_compounds(media_db[medium], exchange_format="'R_EX_M_{}_e_pool'")
+                medium_id = medium
+            else:
+                env = Environment.complete(community.merged)
+                medium_id = 'complete'
+
+            global_data.append((comm_id, medium_id, len(organisms)))
+            detailed_data.append((comm_id, medium_id))
+
+            metabolites = set()
+
+            if 'mip' in scores:
+
+                if verbose:
+                    print('Running MIP for community {} on medium {}...'.format(comm_id, medium_id))
+
+                mip, extras = mip_score(community, environment=env, verbose=verbose,
+                                        min_mass_weight=min_mass_weight, exclude=excluded_mets)
+                if mip is None:
+                    mip_data.append((comm_id, medium_id, 'Failed', 'Failed'))
+                else:
+                    nip = old_div(mip, float(len(extras['noninteracting_medium'])))
+                    mip_data.append((comm_id, medium_id, mip, nip))
+
+            if 'mro' in scores:
+
+                if verbose:
+                    print('Running MRO for community {} on medium {}...'.format(comm_id, medium_id))
+
+                mro, _ = mro_score(community, environment=env, verbose=verbose,
+                                   min_mass_weight=min_mass_weight, exclude=excluded_mets)
+                if mro is None:
+                    mro_data.append((comm_id, medium_id, 'Failed'))
+                else:
+                    mro_data.append((comm_id, medium_id, mro))
+
+            if 'scs' in scores:
+
+                if verbose:
+                    print('Running SCS for community {} on medium {}...'.format(comm_id, medium_id))
+
+                scs = species_coupling_score(community, environment=env, verbose=verbose)
+
+                for org1, values in list(scs.items()):
+                    if values is None:
+                        scs_data.append((comm_id, medium_id, org1, 'Failed', 'Failed'))
+                    else:
+                        for org2, value in list(values.items()):
+                            scs_data.append((comm_id, medium_id, org1, org2, value))
+
+            if 'mus' in scores:
+
+                if verbose:
+                    print('Running MUS for community {} on medium {}...'.format(comm_id, medium_id))
+
+                mus = metabolite_uptake_score(community, environment=env, verbose=verbose,
+                                              min_mass_weight=min_mass_weight, exclude=excluded_mets)
+
+                for org, values in list(mus.items()):
+                    if values is None:
+                        mus_data.append((comm_id, medium_id, org, 'Failed', 'Failed'))
+                    else:
+                        metabolites.update(list(values.keys()))
+                        for met, value in list(values.items()):
+                            mus_data.append((comm_id, medium_id, org, met, value))
+
+            if 'mps' in scores:
+
+                if verbose:
+                    print('Running MPS for community {} on medium {}...'.format(comm_id, medium_id))
+
+                mps = metabolite_production_score(community, environment=env, exclude=excluded_mets)
+
+                for org, values in list(mps.items()):
+                    if values is None:
+                        mps_data.append((comm_id, medium_id, org, 'Failed', 'Failed'))
+                    else:
+                        metabolites.update(list(values.keys()))
+                        for met, value in list(values.items()):
+                            mps_data.append((comm_id, medium_id, org, met, value))
+
+            if 'smetana' in scores:
+                smt_total = None
+
+                for org1 in organisms:
+                    for org2 in organisms:
+                        if org1 == org2:
+                            continue
+                        if scs[org1] is None or mus[org1] is None or mps[org2] is None:
+                            smt_data.append((comm_id, medium_id, org1, org2, 'Failed', 'Failed'))
+                        else:
+                            for met in sorted(metabolites):
+                                smt = scs[org1][org2] * mus[org1].get(met, 0) * mps[org2].get(met, 0)
+                                smt_data.append((comm_id, medium_id, org1, org2, met, smt))
+                                smt_total = smt if smt_total is None else smt_total + smt
+
+                if smt_total is None:
+                    smt_global.append((comm_id, medium_id, 'Failed'))
+                else:
+                    smt_global.append((comm_id, medium_id, smt_total))
+
+    # export results
+
+    global_df = pd.DataFrame(global_data, columns=['community', 'medium', 'size'])
+    detailed_df = pd.DataFrame(detailed_data, columns=['community', 'medium'])
+
+    if 'mip' in scores:
+        mip_df = pd.DataFrame(mip_data, columns=['community', 'medium', 'mip', 'nip'])
+        global_df = pd.merge(global_df, mip_df)
+
+    if 'mro' in scores:
+        mro_df = pd.DataFrame(mro_data, columns=['community', 'medium', 'mro'])
+        global_df = pd.merge(global_df, mro_df)
+
+    if 'scs' in scores:
+        scs_df = pd.DataFrame(scs_data, columns=['community', 'medium', 'receiver', 'donor', 'scs'])
+        detailed_df = pd.merge(detailed_df, scs_df)
+
+    if 'mus' in scores:
+        mus_df = pd.DataFrame(mus_data, columns=['community', 'medium', 'receiver', 'compound', 'mus'])
+        detailed_df = pd.merge(detailed_df, mus_df)
+
+    if 'mps' in scores:
+        mps_df = pd.DataFrame(mps_data, columns=['community', 'medium', 'donor', 'compound', 'mps'])
+        detailed_df = pd.merge(detailed_df, mps_df)
+
+    if 'smetana' in scores:
+        smt_df = pd.DataFrame(smt_data, columns=['community', 'medium', 'receiver', 'donor', 'compound', 'smetana'])
+        detailed_df = pd.merge(detailed_df, smt_df)
+
+        smt_gdf = pd.DataFrame(smt_global, columns=['community', 'medium', 'smetana'])
+        global_df = pd.merge(global_df, smt_gdf)
+
+    prefix = output + '_' if output else ''
+
+    if len(global_df.columns) > 3:
+        global_df.sort_values(['community', 'medium'], inplace=True)
+        global_df.to_csv(prefix + 'global.tsv', sep='\t', index=False)
+
+    if len(detailed_df.columns) > 2:
+        if 'smetana' in detailed_df.columns and not zeros:
+            detailed_df = detailed_df.query('smetana > 0')
+        col_order = ['community', 'medium', 'receiver', 'donor', 'compound', 'scs', 'mus', 'mps', 'smetana']
+        cols = [x[1] for x in sorted((col_order.index(col), col) for col in detailed_df.columns)]
+        detailed_df = detailed_df[cols].sort_values(cols)
+        detailed_df.to_csv(prefix + 'detailed.tsv', sep='\t', index=False)
+
+    if verbose:
+        print('Done.')
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description="Calculate SMETANA scores for one or multiple microbial communities.",
+                                     formatter_class=argparse.RawTextHelpFormatter)
+
+    parser.add_argument('models', metavar='MODELS', nargs='+',
+                        help=textwrap.dedent(
+        """
+        Multiple single-species models (one or more files).
+        
+        You can use wild-cards, for example: models/*.xml, and optionally protect with quotes to avoid automatic bash
+        expansion (this will be faster for long lists): "models/*.xml". 
+        """
+        ))
+
+    parser.add_argument('-c', '--communities', metavar='COMMUNITIES.TSV', dest='communities',
+                        help=textwrap.dedent(
+        """
+        Run SMETANA for multiple (sub)communities.
+        The communities must be specified in a two-column tab-separated file with community and organism identifiers.
+        The organism identifiers should match the file names in the SBML files (without extension).
+        
+        Example:
+            community1\torganism1
+            community1\torganism2
+            community2\torganism1
+            community2\torganism3
+            
+        """
+    ))
+
+    parser.add_argument('-o', '--output', dest='output', help="Prefix for output file(s).")
+    parser.add_argument('--flavor', help="Expected SBML flavor of the input files.")
+    parser.add_argument('-m', '--media', dest='media', help="Run SMETANA for given media (comma-separated).")
+    parser.add_argument('--mediadb', help="Media database file")
+    parser.add_argument('-s', '--scores', dest='scores', help="Only run specified scores (comma-separated).")
+    parser.add_argument('-v', '--verbose', action='store_true', dest='verbose', help="Switch to verbose mode")
+    parser.add_argument('-z', '--zeros', action='store_true', dest='zeros', help="Include entries with zero score.")
+    parser.add_argument('--solver', help="Change default solver (current options: 'gurobi', 'cplex').")
+    parser.add_argument('--ext', help="Extracellular compartment identifier in the models (default 'C_e').")
+    parser.add_argument('--massweight', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--exclude', help=argparse.SUPPRESS)
+
+    args = parser.parse_args()
+
+    if args.media and not args.mediadb:
+        parser.error('Please provide media library file with --mediadb')
+
+    if not args.scores:
+        scores = SCORES
+    else:
+        scores = set(args.scores.lower().split(','))
+        unknown = scores - SCORES
+        if unknown:
+            parser.error("Invalid algorithms {}. Valid values are: {}.".format(unknown, SCORES))
+
+    if args.solver:
+        set_default_solver(args.solver)
+
+    ext_comp_id = args.ext if args.ext else 'C_e'
+
+    main(
+        models=args.models,
+        communities=args.communities,
+        scores=scores,
+        output=args.output,
+        flavor=args.flavor,
+        media=args.media,
+        mediadb=args.mediadb,
+        zeros=args.zeros,
+        ext_comp_id=ext_comp_id,
+        verbose=args.verbose,
+        min_mass_weight=args.massweight,
+        exclude=args.exclude
+    )
+
+
