@@ -31,6 +31,7 @@ setup(
         'License :: OSI Approved :: Apache Software License',
     ],
     description="Species METabolic interaction ANAlysis (SMETANA) is a python-based command line tool to analyse microbial communities.",
+    scripts=script_list,
     install_requires=requirements,
     license="Apache Software License 2.0",
     long_description=readme,
