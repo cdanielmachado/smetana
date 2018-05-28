@@ -7,12 +7,11 @@ import argparse
 import textwrap
 import os
 import glob
-from framed import load_cbmodel, Community, Environment, set_default_solver
 import pandas as pd
 from collections import OrderedDict
-from framed.community.smetana import mip_score, mro_score
-from framed.community.smetana import species_coupling_score, metabolite_production_score, metabolite_uptake_score
+from framed import load_cbmodel, Community, Environment, set_default_solver
 from framed.experimental.medium import load_media_db
+from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score
 
 SCORES = {
     'mip',
