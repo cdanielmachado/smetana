@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 import mock
 
-MOCK_MODULES = ['cplex', 'gurobipy', 'future', 'builtins']
+MOCK_MODULES = ['cplex', 'gurobipy', 'future', 'builtins', 'framed']
 
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
