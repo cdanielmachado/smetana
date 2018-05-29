@@ -4,48 +4,29 @@
 Installation
 ============
 
+SMETANA currently supports Python 2.7 and Python 3.6, which are available for all major operating systems. We recommend the `Anaconda python
+distribution <https://www.continuum.io/downloads>`_.
 
-Stable release
---------------
-
-To install smetana, run this command in your terminal:
+It can be easily installed using the **pip** package manager:
 
 .. code-block:: console
 
     $ pip install smetana
 
-This is the preferred method to install smetana, as it will always install the most recent stable release.
+This will automatically install other dependencies as well:
 
-If you don't have `pip`_ installed, this `Python installation guide`_ can guide
-you through the process.
+- framed_
+- pandas_
 
-.. _pip: https://pip.pypa.io
-.. _Python installation guide: http://docs.python-guide.org/en/latest/starting/installation/
+.. _framed: https://github.com/cdanielmachado/framed
+.. _pandas: https://pandas.pydata.org/
 
+Additionally, you must install one of the supported solvers:
 
-From sources
-------------
+- CPLEX_
+- Gurobi_
 
-The sources for smetana can be downloaded from the `Github repo`_.
+.. _CPLEX: https://www.ibm.com/analytics/data-science/prescriptive-analytics/cplex-optimizer
+.. _Gurobi: https://www.gurobi.com/
 
-You can either clone the public repository:
-
-.. code-block:: console
-
-    $ git clone git://github.com/cdanielmachado/smetana
-
-Or download the `tarball`_:
-
-.. code-block:: console
-
-    $ curl  -OL https://github.com/cdanielmachado/smetana/tarball/master
-
-Once you have a copy of the source, you can install it with:
-
-.. code-block:: console
-
-    $ python setup.py install
-
-
-.. _Github repo: https://github.com/cdanielmachado/smetana
-.. _tarball: https://github.com/cdanielmachado/smetana/tarball/master
+From our experience you get faster results using CPLEX.

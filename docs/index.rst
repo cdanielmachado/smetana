@@ -1,16 +1,13 @@
-Welcome to smetana's documentation!
-======================================
+Welcome to SMETANA's documentation!
+===================================
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   readme
    installation
    usage
-   modules
-   contributing
-   history
+   algorithms
 
 Indices and tables
 ==================
