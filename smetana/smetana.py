@@ -1,7 +1,6 @@
 from __future__ import division
 from builtins import map
 from builtins import range
-from past.utils import old_div
 from framed.community.model import Community
 from framed.experimental.medium import minimal_medium
 from framed.solvers import solver_instance
@@ -92,7 +91,7 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
             if not failed:
                 donors_list_n = float(len(donors_list))
                 donors_counter = Counter(chain(*donors_list))
-                scores[org_id] = {o: old_div(donors_counter[o],donors_list_n) for o in other}
+                scores[org_id] = {o: donors_counter[o] / donors_list_n for o in other}
             else:
                 if verbose:
                     warn('SCS: Failed to find a solution for growth of ' + org_id)
@@ -109,7 +108,7 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
             else:
                 donor_count = [o for sol in sols for o in other if sol.values["y_{}".format(o)] > abstol]
                 donor_count = Counter(donor_count)
-                scores[org_id] = {o: old_div(donor_count[o], float(len(sols))) for o in other}
+                scores[org_id] = {o: donor_count[o] / len(sols) for o in other}
 
     return scores
 
@@ -156,7 +155,7 @@ def metabolite_uptake_score(community, environment=None, min_mass_weight=False, 
 
         if medium_list:
             counter = Counter(chain(*medium_list))
-            scores[org_id] = {cnm.original_metabolite: old_div(counter[ex], float(len(medium_list)))
+            scores[org_id] = {cnm.original_metabolite: counter[ex] / len(medium_list)
                               for ex, cnm in exchange_rxns.items()}
         else:
             if verbose:
@@ -358,7 +357,7 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
     numerator = len(individual_media) * sum(map(len, pairwise.values()))
     denominator = float(len(pairwise) * sum(map(len, individual_media.values())))
 
-    score = old_div(numerator, denominator) if denominator != 0 else None
+    score = numerator / denominator if denominator != 0 else None
     extras = {'noninteracting_medium': noninteracting_medium, 'individual_media': individual_media, 
               'pairwise': pairwise, 'solutions': solutions}
 

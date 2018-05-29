@@ -2,7 +2,6 @@
 
 from __future__ import division
 from __future__ import print_function
-from past.utils import old_div
 import argparse
 import textwrap
 import os
@@ -153,7 +152,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                 if mip is None:
                     mip_data.append((comm_id, medium_id, 'Failed', 'Failed'))
                 else:
-                    nip = old_div(mip, float(len(extras['noninteracting_medium'])))
+                    nip = mip / len(extras['noninteracting_medium'])
                     mip_data.append((comm_id, medium_id, mip, nip))
 
             if 'mro' in scores:
