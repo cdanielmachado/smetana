@@ -54,9 +54,10 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'smetana'
-copyright = u"2018, Daniel Machado"
-author = u"Daniel Machado"
+
+project = u'SMETANA'
+copyright = u"European Molecular Biology Laboratory, 2018"
+author = u"Daniel Machado and Sergej Andrejev"
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
