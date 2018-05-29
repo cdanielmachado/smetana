@@ -1,5 +1,5 @@
-Welcome to SMETANA's documentation!
-===================================
+Welcome to SMETANA!
+===================
 
 .. toctree::
    :maxdepth: 2
@@ -9,8 +9,3 @@ Welcome to SMETANA's documentation!
    usage
    algorithms
 
-Indices and tables
-==================
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
