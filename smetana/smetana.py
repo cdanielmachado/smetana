@@ -10,6 +10,8 @@ from framed import Environment
 from collections import Counter
 from itertools import combinations, chain
 from warnings import warn
+from functools import reduce
+
 
 
 def species_coupling_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6,
@@ -252,34 +254,46 @@ def mip_score(community, environment=None, min_mass_weight=False, min_growth=0.1
     exch_reactions = set(community.merged.get_exchange_reactions())
 
     if environment:
-        environment.apply(community.merged, inplace=True, warning=False)
+#        environment.apply(community.merged, inplace=True, warning=False)
         environment.apply(noninteracting.merged, inplace=True, warning=False)
         exch_reactions &= set(environment)
 
-    interacting_medium, sol1 = minimal_medium(community.merged, direction=direction, exchange_reactions=exch_reactions,
-                                              min_mass_weight=min_mass_weight, min_growth=min_growth,
-                                              max_uptake=max_uptake, validate=validate, warnings=verbose)
-
-    noninteracting_medium, sol2 = minimal_medium(noninteracting.merged, exchange_reactions=exch_reactions,
+    noninteracting_medium, sol1 = minimal_medium(noninteracting.merged, exchange_reactions=exch_reactions,
                                                  direction=direction, min_mass_weight=min_mass_weight,
                                                  min_growth=min_growth, max_uptake=max_uptake, validate=validate,
                                                  warnings=verbose)
-
     if noninteracting_medium is None:
         if verbose:
             warn('MIP: Failed to find a valid solution for non-interacting community')
         return None, None
-    else:
 
-        if exclude is not None:
-            exclude_rxns = {'R_EX_M_{}_e_pool'.format(x) for x in exclude}
-            interacting_medium = set(interacting_medium) - exclude_rxns
-            noninteracting_medium = set(noninteracting_medium) - exclude_rxns
+    # anabiotic environment is limited to non-interacting community minimal media
+    noninteracting_exch = set(noninteracting_medium)
+    noninteracting_env = Environment.from_reactions(noninteracting_exch, max_uptake=max_uptake)
+    noninteracting_env.apply(community.merged, inplace=True)
 
-        score = len(noninteracting_medium) - len(interacting_medium)
+    interacting_medium, sol2 = minimal_medium(community.merged, direction=direction, exchange_reactions=noninteracting_medium,
+                                              min_mass_weight=min_mass_weight, min_growth=min_growth,
+                                              max_uptake=max_uptake, validate=validate, warnings=verbose)
+
+    if interacting_medium is None:
+        if verbose:
+            warn('MIP: Failed to find a valid solution for interacting community')
+        return None, None
+
+    if exclude is not None:
+        exclude_rxns = {'R_EX_M_{}_e_pool'.format(x) for x in exclude}
+        interacting_medium = set(interacting_medium) - exclude_rxns
+        noninteracting_medium = set(noninteracting_medium) - exclude_rxns
+
+    score = len(noninteracting_medium) - len(interacting_medium)
+
+    difference = set(noninteracting_medium) - set(interacting_medium)
+    difference = ','.join(r_id[7:-7] for r_id in sorted(difference))
 
     extras = {'noninteracting_medium': noninteracting_medium, 'interacting_medium': interacting_medium,
-              'noninteracting_solution': sol2, 'interacting_solution': sol1}
+              'noninteracting_solution': sol1, 'interacting_solution': sol2,
+              'difference': difference}
 
     return score, extras
 
@@ -352,13 +366,28 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
 
         individual_media[org_id] = {org_noninteracting_exch[r].original_metabolite for r in medium} - exclude
 
+    print(individual_media)
+
     pairwise = {(o1, o2): individual_media[o1] & individual_media[o2] for o1, o2 in combinations(community.organisms, 2)}
 
-    numerator = len(individual_media) * sum(map(len, pairwise.values()))
-    denominator = float(len(pairwise) * sum(map(len, individual_media.values())))
+#    numerator = len(individual_media) * sum(map(len, pairwise.values()))
+#    denominator = float(len(pairwise) * sum(map(len, individual_media.values())))
+
+    numerator = sum(map(len, pairwise.values())) / len(pairwise)
+    denominator = sum(map(len, individual_media.values())) / len(individual_media)
+    union = len(reduce(set.__or__, individual_media.values()))
+
+    # Average resource overlap calculation
+
+    repeated = [x[2:-2] for org_id in community.organisms for x in individual_media[org_id]]
+    freqs = [(x-1)/(len(community.organisms)-1) for x in Counter(repeated).values()]
+    aro = sum(freqs) / len(freqs)
+    counts = str(Counter(repeated).items())
 
     score = numerator / denominator if denominator != 0 else None
     extras = {'noninteracting_medium': noninteracting_medium, 'individual_media': individual_media, 
-              'pairwise': pairwise, 'solutions': solutions}
+              'pairwise': pairwise, 'solutions': solutions,
+              'numerator': numerator, 'denominator': denominator, 'union': union,
+              'aro': aro, 'counts': counts}
 
     return score, extras

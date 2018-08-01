@@ -150,22 +150,35 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                 mip, extras = mip_score(community, environment=env, verbose=verbose,
                                         min_mass_weight=min_mass_weight, exclude=excluded_mets)
                 if mip is None:
-                    mip_data.append((comm_id, medium_id, 'Failed', 'Failed'))
+#                    mip_data.append((comm_id, medium_id, 'Failed'))
+                    mip_data.append((comm_id, medium_id, 'Failed', 'Failed', 'Failed', 'Failed'))
                 else:
+#                    mip_data.append((comm_id, medium_id, mip))
                     nip = mip / len(extras['noninteracting_medium'])
-                    mip_data.append((comm_id, medium_id, mip, nip))
+                    mip_ni = len(extras['noninteracting_medium'])
+                    mip_i = len(extras['interacting_medium'])
+                    mip_diff = extras['difference']
+                    mip_data.append((comm_id, medium_id, mip, nip, mip_ni, mip_i, mip_diff))
 
             if 'mro' in scores:
 
                 if verbose:
                     print('Running MRO for community {} on medium {}...'.format(comm_id, medium_id))
 
-                mro, _ = mro_score(community, environment=env, verbose=verbose,
-                                   min_mass_weight=min_mass_weight, exclude=excluded_mets)
+                mro, extras = mro_score(community, environment=env, verbose=verbose,
+                                        min_mass_weight=min_mass_weight, exclude=excluded_mets)
                 if mro is None:
-                    mro_data.append((comm_id, medium_id, 'Failed'))
+#                    mro_data.append((comm_id, medium_id, 'Failed'))
+                    mro_data.append((comm_id, medium_id, 'Failed', 'Failed', 'Failed', 'Failed', 'Failed', 'Failed', 'Failed'))
                 else:
-                    mro_data.append((comm_id, medium_id, mro))
+#                    mro_data.append((comm_id, medium_id, mro))
+                    mro_ni = len(extras['noninteracting_medium'])
+                    mro_num = extras['numerator']
+                    mro_den = extras['denominator']
+                    mro_union = extras['union']
+                    aro = extras['aro']
+                    mro_counts = extras['counts']
+                    mro_data.append((comm_id, medium_id, mro, mro_ni, mro_num, mro_den, mro_union, aro, mro_counts))
 
             if 'scs' in scores:
 
@@ -238,11 +251,14 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
     detailed_df = pd.DataFrame(detailed_data, columns=['community', 'medium'])
 
     if 'mip' in scores:
-        mip_df = pd.DataFrame(mip_data, columns=['community', 'medium', 'mip', 'nip'])
+#        mip_df = pd.DataFrame(mip_data, columns=['community', 'medium', 'mip'])
+        mip_df = pd.DataFrame(mip_data, columns=['community', 'medium', 'mip',
+                                                 'nip', 'mip_ni', 'mip_i', 'mip_diff'])
         global_df = pd.merge(global_df, mip_df)
 
     if 'mro' in scores:
-        mro_df = pd.DataFrame(mro_data, columns=['community', 'medium', 'mro'])
+        mro_df = pd.DataFrame(mro_data, columns=['community', 'medium', 'mro',
+                                                 'mro_ni', 'mro_num', 'mro_den', 'mro_union', 'aro', 'mro_counts'])
         global_df = pd.merge(global_df, mro_df)
 
     if 'scs' in scores:
