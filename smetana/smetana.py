@@ -254,7 +254,6 @@ def mip_score(community, environment=None, min_mass_weight=False, min_growth=0.1
     exch_reactions = set(community.merged.get_exchange_reactions())
 
     if environment:
-#        environment.apply(community.merged, inplace=True, warning=False)
         environment.apply(noninteracting.merged, inplace=True, warning=False)
         exch_reactions &= set(environment)
 
@@ -268,8 +267,7 @@ def mip_score(community, environment=None, min_mass_weight=False, min_growth=0.1
         return None, None
 
     # anabiotic environment is limited to non-interacting community minimal media
-    noninteracting_exch = set(noninteracting_medium)
-    noninteracting_env = Environment.from_reactions(noninteracting_exch, max_uptake=max_uptake)
+    noninteracting_env = Environment.from_reactions(noninteracting_medium, max_uptake=max_uptake)
     noninteracting_env.apply(community.merged, inplace=True)
 
     interacting_medium, sol2 = minimal_medium(community.merged, direction=direction, exchange_reactions=noninteracting_medium,
@@ -337,25 +335,27 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
         return None, None
 
     # anabiotic environment is limited to non-interacting community minimal media
-    noninteracting_exch = set(noninteracting_medium)
-    noninteracting_env = Environment.from_reactions(noninteracting_exch, max_uptake=max_uptake)
+    noninteracting_env = Environment.from_reactions(noninteracting_medium, max_uptake=max_uptake)
     noninteracting_env.apply(community.merged, inplace=True)
-
-    individual_media = {}
+    noninteracting_env.apply(noninteracting.merged, inplace=True)
 
     if exclude is not None:
-        exclude = {'M_{}_e'.format(x) for x in exclude}
+        exclude_mets = {'M_{}_e'.format(x) for x in exclude}
+        exclude_rxns = {'R_EX_M_{}_e_pool'.format(x) for x in exclude}
+        noninteracting_medium = noninteracting_medium - exclude_rxns
     else:
-        exclude = {}
+        exclude_mets = {}
+
+    individual_media = {}
 
     solver = solver_instance(community.merged)
     for org_id in community.organisms:
         biomass_reaction = community.organisms_biomass_reactions[org_id]
         community.merged.biomass_reaction = biomass_reaction
 
-        org_noninteracting_exch = community.organisms_exchange_reactions[org_id]
+        org_exch = community.organisms_exchange_reactions[org_id]
 
-        medium, sol = minimal_medium(community.merged, exchange_reactions=org_noninteracting_exch, direction=direction,
+        medium, sol = minimal_medium(community.merged, exchange_reactions=org_exch, direction=direction,
                                      min_mass_weight=min_mass_weight, min_growth=min_growth, max_uptake=max_uptake,
                                      validate=validate, solver=solver, warnings=verbose)
         solutions.append(sol)
@@ -364,11 +364,32 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
             warn('MRO: Failed to find a valid solution for: ' + org_id)
             return None, None
 
-        individual_media[org_id] = {org_noninteracting_exch[r].original_metabolite for r in medium} - exclude
-
-    print(individual_media)
+        individual_media[org_id] = {org_exch[r].original_metabolite for r in medium} - exclude_mets
 
     pairwise = {(o1, o2): individual_media[o1] & individual_media[o2] for o1, o2 in combinations(community.organisms, 2)}
+
+
+    individual_media2 = {}
+
+    solver2 = solver_instance(noninteracting.merged)
+    for org_id in noninteracting.organisms:
+        biomass_reaction = noninteracting.organisms_biomass_reactions[org_id]
+        noninteracting.merged.biomass_reaction = biomass_reaction
+
+        org_noninteracting_exch = noninteracting.organisms_exchange_reactions[org_id]
+
+        medium, sol = minimal_medium(noninteracting.merged, exchange_reactions=org_noninteracting_exch, direction=direction,
+                                     min_mass_weight=min_mass_weight, min_growth=min_growth, max_uptake=max_uptake,
+                                     validate=validate, solver=solver2, warnings=verbose)
+
+        if sol.status != Status.OPTIMAL:
+            warn('MRO: Failed to find a valid solution for: ' + org_id)
+            return None, None
+
+        individual_media2[org_id] = {org_noninteracting_exch[r].original_metabolite for r in medium} - exclude_mets
+
+    pairwise2 = {(o1, o2): individual_media2[o1] & individual_media2[o2] for o1, o2 in combinations(noninteracting.organisms, 2)}
+
 
 #    numerator = len(individual_media) * sum(map(len, pairwise.values()))
 #    denominator = float(len(pairwise) * sum(map(len, individual_media.values())))
@@ -376,18 +397,22 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
     numerator = sum(map(len, pairwise.values())) / len(pairwise)
     denominator = sum(map(len, individual_media.values())) / len(individual_media)
     union = len(reduce(set.__or__, individual_media.values()))
+    score = numerator / denominator if denominator != 0 else None
 
     # Average resource overlap calculation
 
     repeated = [x[2:-2] for org_id in community.organisms for x in individual_media[org_id]]
     freqs = [(x-1)/(len(community.organisms)-1) for x in Counter(repeated).values()]
     aro = sum(freqs) / len(freqs)
-    counts = str(Counter(repeated).items())
+    counts = str(dict(Counter(repeated)))
 
-    score = numerator / denominator if denominator != 0 else None
-    extras = {'noninteracting_medium': noninteracting_medium, 'individual_media': individual_media, 
+    numerator2 = sum(map(len, pairwise2.values())) / len(pairwise2)
+    denominator2 = sum(map(len, individual_media2.values())) / len(individual_media2)
+    score2 = numerator2 / denominator2 if denominator2 != 0 else None
+
+    extras = {'noninteracting_medium': noninteracting_medium, 'individual_media': individual_media,
               'pairwise': pairwise, 'solutions': solutions,
               'numerator': numerator, 'denominator': denominator, 'union': union,
-              'aro': aro, 'counts': counts}
+              'aro': aro, 'counts': counts, 'mro2': score2}
 
     return score, extras

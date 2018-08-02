@@ -178,7 +178,8 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                     mro_union = extras['union']
                     aro = extras['aro']
                     mro_counts = extras['counts']
-                    mro_data.append((comm_id, medium_id, mro, mro_ni, mro_num, mro_den, mro_union, aro, mro_counts))
+                    mro2 = extras['mro2']
+                    mro_data.append((comm_id, medium_id, mro, mro_ni, mro_num, mro_den, mro_union, aro, mro_counts, mro2))
 
             if 'scs' in scores:
 
@@ -258,7 +259,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
 
     if 'mro' in scores:
         mro_df = pd.DataFrame(mro_data, columns=['community', 'medium', 'mro',
-                                                 'mro_ni', 'mro_num', 'mro_den', 'mro_union', 'aro', 'mro_counts'])
+                                                 'mro_ni', 'mro_num', 'mro_den', 'mro_union', 'aro', 'mro_counts', 'mro2'])
         global_df = pd.merge(global_df, mro_df)
 
     if 'scs' in scores:
