@@ -115,7 +115,7 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
     return scores
 
 
-def metabolite_uptake_score(community, environment=None, min_mass_weight=False, min_growth=0.1, max_uptake=10.0,
+def metabolite_uptake_score(community, environment=None, min_mol_weight=False, min_growth=0.1, max_uptake=10.0,
                             abstol=1e-6, validate=False, n_solutions=100, pool_gap=0.5, verbose=True,
                             exclude=None):  #TODO: implement excluded
     """
@@ -126,7 +126,7 @@ def metabolite_uptake_score(community, environment=None, min_mass_weight=False, 
     Args:
         community (Community): microbial community
         environment (Environment): metabolic environment
-        min_mass_weight (bool): Prefer smaller compounds (default: False)
+        min_mol_weight (bool): Prefer smaller compounds (default: False)
         min_growth (float): minimum growth rate (default: 0.1)
         max_uptake (float): maximum uptake rate (default: 10)
         abstol (float): tolerance for detecting a non-zero exchange flux (default: 1e-6)
@@ -150,7 +150,7 @@ def metabolite_uptake_score(community, environment=None, min_mass_weight=False, 
         community.merged.biomass_reaction = biomass_reaction
 
         medium_list, sols = minimal_medium(community.merged, exchange_reactions=list(exchange_rxns.keys()),
-                                           min_mass_weight=min_mass_weight, min_growth=min_growth,
+                                           min_mass_weight=min_mol_weight, min_growth=min_growth,
                                            n_solutions=n_solutions, max_uptake=max_uptake, validate=validate,
                                            abstol=abstol, use_pool=True, pool_gap=pool_gap, solver=solver,
                                            warnings=verbose)
@@ -231,8 +231,8 @@ def metabolite_production_score(community, environment=None, abstol=1e-3, exclud
     return scores
 
 
-def mip_score(community, environment=None, min_mass_weight=False, min_growth=0.1, direction=-1, max_uptake=10,
-              validate=False, verbose=True, exclude=None):
+def mip_score(community, environment=None, min_mol_weight=False, min_growth=0.1, direction=-1, max_uptake=10,
+              validate=False, verbose=True, use_lp=False, exclude=None):
     """
     Implements the metabolic interaction potential (MIP) score as defined in (Zelezniak et al, 2015).
 
@@ -241,7 +241,7 @@ def mip_score(community, environment=None, min_mass_weight=False, min_growth=0.1
         environment (Environment): Metabolic environment in which the SMETANA score is calculated
         direction (int): direction of uptake reactions (negative or positive, default: -1)
         extracellular_id (str): extracellular compartment id
-        min_mass_weight (bool): minimize by molecular weight of nutrients (default: False)
+        min_mol_weight (bool): minimize by molecular weight of nutrients (default: False)
         min_growth (float): minimum growth rate (default: 0.1)
         max_uptake (float): maximum uptake rate (default: 10)
         validate (bool): validate solution using FBA (for debugging purposes, default: False)
@@ -258,9 +258,9 @@ def mip_score(community, environment=None, min_mass_weight=False, min_growth=0.1
         exch_reactions &= set(environment)
 
     noninteracting_medium, sol1 = minimal_medium(noninteracting.merged, exchange_reactions=exch_reactions,
-                                                 direction=direction, min_mass_weight=min_mass_weight,
+                                                 direction=direction, min_mass_weight=min_mol_weight,
                                                  min_growth=min_growth, max_uptake=max_uptake, validate=validate,
-                                                 warnings=verbose)
+                                                 warnings=verbose, milp=(not use_lp))
     if noninteracting_medium is None:
         if verbose:
             warn('MIP: Failed to find a valid solution for non-interacting community')
@@ -271,7 +271,7 @@ def mip_score(community, environment=None, min_mass_weight=False, min_growth=0.1
     noninteracting_env.apply(community.merged, inplace=True)
 
     interacting_medium, sol2 = minimal_medium(community.merged, direction=direction, exchange_reactions=noninteracting_medium,
-                                              min_mass_weight=min_mass_weight, min_growth=min_growth,
+                                              min_mass_weight=min_mol_weight, min_growth=min_growth, milp=(not use_lp),
                                               max_uptake=max_uptake, validate=validate, warnings=verbose)
 
     if interacting_medium is None:
@@ -296,8 +296,8 @@ def mip_score(community, environment=None, min_mass_weight=False, min_growth=0.1
     return score, extras
 
 
-def mro_score(community, environment=None, direction=-1, min_mass_weight=False, min_growth=0.1, max_uptake=10,
-              validate=False, verbose=True, exclude=None):
+def mro_score(community, environment=None, direction=-1, min_mol_weight=False, min_growth=0.1, max_uptake=10,
+              validate=False, verbose=True, use_lp=False, exclude=None):
     """
     Implements the metabolic resource overlap (MRO) score as defined in (Zelezniak et al, 2015).
 
@@ -306,7 +306,7 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
         environment (Environment): Metabolic environment in which the SMETANA score is colulated
         direction (int): direction of uptake reactions (negative or positive, default: -1)
         extracellular_id (str): extracellular compartment id
-        min_mass_weight (bool): minimize by molecular weight of nutrients (default: False)
+        min_mol_weight (bool): minimize by molecular weight of nutrients (default: False)
         min_growth (float): minimum growth rate (default: 0.1)
         max_uptake (float): maximum uptake rate (default: 10)
 
@@ -323,9 +323,9 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
         exch_reactions &= set(environment)
 
     noninteracting_medium, sol = minimal_medium(noninteracting.merged, exchange_reactions=exch_reactions,
-                                                direction=direction, min_mass_weight=min_mass_weight,
+                                                direction=direction, min_mass_weight=min_mol_weight,
                                                 min_growth=min_growth, max_uptake=max_uptake, validate=validate,
-                                                warnings=verbose)
+                                                warnings=verbose, milp=(not use_lp))
 
     solutions = [sol]
 
@@ -348,30 +348,7 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
 
     individual_media = {}
 
-    solver = solver_instance(community.merged)
-    for org_id in community.organisms:
-        biomass_reaction = community.organisms_biomass_reactions[org_id]
-        community.merged.biomass_reaction = biomass_reaction
-
-        org_exch = community.organisms_exchange_reactions[org_id]
-
-        medium, sol = minimal_medium(community.merged, exchange_reactions=org_exch, direction=direction,
-                                     min_mass_weight=min_mass_weight, min_growth=min_growth, max_uptake=max_uptake,
-                                     validate=validate, solver=solver, warnings=verbose)
-        solutions.append(sol)
-
-        if sol.status != Status.OPTIMAL:
-            warn('MRO: Failed to find a valid solution for: ' + org_id)
-            return None, None
-
-        individual_media[org_id] = {org_exch[r].original_metabolite for r in medium} - exclude_mets
-
-    pairwise = {(o1, o2): individual_media[o1] & individual_media[o2] for o1, o2 in combinations(community.organisms, 2)}
-
-
-    individual_media2 = {}
-
-    solver2 = solver_instance(noninteracting.merged)
+    solver = solver_instance(noninteracting.merged)
     for org_id in noninteracting.organisms:
         biomass_reaction = noninteracting.organisms_biomass_reactions[org_id]
         noninteracting.merged.biomass_reaction = biomass_reaction
@@ -379,20 +356,16 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
         org_noninteracting_exch = noninteracting.organisms_exchange_reactions[org_id]
 
         medium, sol = minimal_medium(noninteracting.merged, exchange_reactions=org_noninteracting_exch, direction=direction,
-                                     min_mass_weight=min_mass_weight, min_growth=min_growth, max_uptake=max_uptake,
-                                     validate=validate, solver=solver2, warnings=verbose)
+                                     min_mass_weight=min_mol_weight, min_growth=min_growth, max_uptake=max_uptake,
+                                     validate=validate, solver=solver, warnings=verbose, milp=(not use_lp))
 
         if sol.status != Status.OPTIMAL:
             warn('MRO: Failed to find a valid solution for: ' + org_id)
             return None, None
 
-        individual_media2[org_id] = {org_noninteracting_exch[r].original_metabolite for r in medium} - exclude_mets
+        individual_media[org_id] = {org_noninteracting_exch[r].original_metabolite for r in medium} - exclude_mets
 
-    pairwise2 = {(o1, o2): individual_media2[o1] & individual_media2[o2] for o1, o2 in combinations(noninteracting.organisms, 2)}
-
-
-#    numerator = len(individual_media) * sum(map(len, pairwise.values()))
-#    denominator = float(len(pairwise) * sum(map(len, individual_media.values())))
+    pairwise = {(o1, o2): individual_media[o1] & individual_media[o2] for o1, o2 in combinations(noninteracting.organisms, 2)}
 
     numerator = sum(map(len, pairwise.values())) / len(pairwise)
     denominator = sum(map(len, individual_media.values())) / len(individual_media)
@@ -406,13 +379,9 @@ def mro_score(community, environment=None, direction=-1, min_mass_weight=False, 
     aro = sum(freqs) / len(freqs)
     counts = str(dict(Counter(repeated)))
 
-    numerator2 = sum(map(len, pairwise2.values())) / len(pairwise2)
-    denominator2 = sum(map(len, individual_media2.values())) / len(individual_media2)
-    score2 = numerator2 / denominator2 if denominator2 != 0 else None
-
     extras = {'noninteracting_medium': noninteracting_medium, 'individual_media': individual_media,
               'pairwise': pairwise, 'solutions': solutions,
               'numerator': numerator, 'denominator': denominator, 'union': union,
-              'aro': aro, 'counts': counts, 'mro2': score2}
+              'aro': aro, 'counts': counts}
 
     return score, extras

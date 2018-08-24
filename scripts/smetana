@@ -61,7 +61,7 @@ def load_communities(filepath):
 
 
 def main(models, communities=None, scores=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
-         ext_comp_id=None, verbose=False, min_mass_weight=False, exclude=None):
+         ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None):
 
     # load models
 
@@ -148,7 +148,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                     print('Running MIP for community {} on medium {}...'.format(comm_id, medium_id))
 
                 mip, extras = mip_score(community, environment=env, verbose=verbose,
-                                        min_mass_weight=min_mass_weight, exclude=excluded_mets)
+                                        min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
                 if mip is None:
 #                    mip_data.append((comm_id, medium_id, 'Failed'))
                     mip_data.append((comm_id, medium_id, 'Failed', 'Failed', 'Failed', 'Failed'))
@@ -166,7 +166,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                     print('Running MRO for community {} on medium {}...'.format(comm_id, medium_id))
 
                 mro, extras = mro_score(community, environment=env, verbose=verbose,
-                                        min_mass_weight=min_mass_weight, exclude=excluded_mets)
+                                        min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
                 if mro is None:
 #                    mro_data.append((comm_id, medium_id, 'Failed'))
                     mro_data.append((comm_id, medium_id, 'Failed', 'Failed', 'Failed', 'Failed', 'Failed', 'Failed', 'Failed'))
@@ -178,8 +178,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                     mro_union = extras['union']
                     aro = extras['aro']
                     mro_counts = extras['counts']
-                    mro2 = extras['mro2']
-                    mro_data.append((comm_id, medium_id, mro, mro_ni, mro_num, mro_den, mro_union, aro, mro_counts, mro2))
+                    mro_data.append((comm_id, medium_id, mro, mro_ni, mro_num, mro_den, mro_union, aro, mro_counts))
 
             if 'scs' in scores:
 
@@ -201,7 +200,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                     print('Running MUS for community {} on medium {}...'.format(comm_id, medium_id))
 
                 mus = metabolite_uptake_score(community, environment=env, verbose=verbose,
-                                              min_mass_weight=min_mass_weight, exclude=excluded_mets)
+                                              min_mol_weight=min_mol_weight, exclude=excluded_mets)
 
                 for org, values in list(mus.items()):
                     if values is None:
@@ -259,7 +258,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
 
     if 'mro' in scores:
         mro_df = pd.DataFrame(mro_data, columns=['community', 'medium', 'mro',
-                                                 'mro_ni', 'mro_num', 'mro_den', 'mro_union', 'aro', 'mro_counts', 'mro2'])
+                                                 'mro_ni', 'mro_num', 'mro_den', 'mro_union', 'aro', 'mro_counts'])
         global_df = pd.merge(global_df, mro_df)
 
     if 'scs' in scores:
@@ -339,8 +338,9 @@ if __name__ == '__main__':
     parser.add_argument('-z', '--zeros', action='store_true', dest='zeros', help="Include entries with zero score.")
     parser.add_argument('--solver', help="Change default solver (current options: 'gurobi', 'cplex').")
     parser.add_argument('--ext', help="Extracellular compartment identifier in the models (default 'C_e').")
-    parser.add_argument('--massweight', action='store_true', help=argparse.SUPPRESS)
-    parser.add_argument('--exclude', help=argparse.SUPPRESS)
+    parser.add_argument('--molweight', action='store_true', help="Use molecular weight minimization (recomended).")
+    parser.add_argument('--lp', action='store_true', help="Compute MIP and MRO using an LP formulation (faster).")
+    parser.add_argument('--exclude', help="List of compounds to exclude from calculations (e.g.: inorganic compounds).")
 
     args = parser.parse_args()
 
@@ -371,7 +371,8 @@ if __name__ == '__main__':
         zeros=args.zeros,
         ext_comp_id=ext_comp_id,
         verbose=args.verbose,
-        min_mass_weight=args.massweight,
+        min_mol_weight=args.molweight,
+        use_lp=args.lp,
         exclude=args.exclude
     )
 
