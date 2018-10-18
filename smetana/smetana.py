@@ -375,7 +375,8 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
     # Average resource overlap calculation
 
     repeated = [x[2:-2] for org_id in community.organisms for x in individual_media[org_id]]
-    freqs = [(x-1)/(len(community.organisms)-1) for x in Counter(repeated).values()]
+    freqs = [(x-1)/(len(community.organisms)-1) if len(community.organisms) > 1 else 0
+             for x in Counter(repeated).values()]
     aro = sum(freqs) / len(freqs)
     counts = str(dict(Counter(repeated)))
 
