@@ -367,8 +367,8 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
 
     pairwise = {(o1, o2): individual_media[o1] & individual_media[o2] for o1, o2 in combinations(noninteracting.organisms, 2)}
 
-    numerator = sum(map(len, pairwise.values())) / len(pairwise)
-    denominator = sum(map(len, individual_media.values())) / len(individual_media)
+    numerator = sum(map(len, pairwise.values())) / len(pairwise) if len(pairwise) != 0 else 0
+    denominator = sum(map(len, individual_media.values())) / len(individual_media) if len(individual_media) != 0 else 0
     union = len(reduce(set.__or__, individual_media.values()))
     score = numerator / denominator if denominator != 0 else None
 

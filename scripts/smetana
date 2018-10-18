@@ -151,7 +151,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                                         min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
                 if mip is None:
 #                    mip_data.append((comm_id, medium_id, 'Failed'))
-                    mip_data.append((comm_id, medium_id, 'Failed', 'Failed', 'Failed', 'Failed'))
+                    mip_data.append((comm_id, medium_id, 'Failed', 'Failed', 'Failed', 'Failed', 'Failed'))
                 else:
 #                    mip_data.append((comm_id, medium_id, mip))
                     nip = mip / len(extras['noninteracting_medium'])
