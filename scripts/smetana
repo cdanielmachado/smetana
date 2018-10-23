@@ -10,7 +10,7 @@ import pandas as pd
 from collections import OrderedDict
 from framed import load_cbmodel, Community, Environment, set_default_solver
 from framed.experimental.medium import load_media_db
-from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score
+from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score, minimal_environment
 
 SCORES = {
     'mip',
@@ -95,8 +95,12 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
     # load media
 
     if media:
+        if media != "minimal":
+            if mediadb is None:
+                raise IOError('Please provide media library with --mediadb option.')
+            else:
+                media_db = load_media_db(mediadb)
         media = media.split(',')
-        media_db = load_media_db(mediadb)
     else:
         media = [None]
 
@@ -130,7 +134,12 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
 
         for medium in media:
 
-            if medium:
+            if medium == "minimal" and (mediadb is None or medium not in mediadb):
+                env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp)
+                if not env:
+                    return
+                medium_id = "minimal"
+            elif medium:
                 env = Environment.from_compounds(media_db[medium], exchange_format="'R_EX_M_{}_e_pool'")
                 medium_id = medium
             else:
@@ -150,8 +159,8 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                 mip, extras = mip_score(community, environment=env, verbose=verbose,
                                         min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
                 if mip is None:
-#                    mip_data.append((comm_id, medium_id, 'Failed'))
-                    mip_data.append((comm_id, medium_id, 'Failed', 'Failed', 'Failed', 'Failed', 'Failed'))
+#                    mip_data.append((comm_id, medium_id, None))
+                    mip_data.append((comm_id, medium_id, None, None, None, None, None))
                 else:
 #                    mip_data.append((comm_id, medium_id, mip))
                     nip = mip / len(extras['noninteracting_medium'])
@@ -168,8 +177,8 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                 mro, extras = mro_score(community, environment=env, verbose=verbose,
                                         min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
                 if mro is None:
-#                    mro_data.append((comm_id, medium_id, 'Failed'))
-                    mro_data.append((comm_id, medium_id, 'Failed', 'Failed', 'Failed', 'Failed', 'Failed', 'Failed', 'Failed'))
+#                    mro_data.append((comm_id, medium_id, None))
+                    mro_data.append((comm_id, medium_id, None, None, None, None, None, None, None))
                 else:
 #                    mro_data.append((comm_id, medium_id, mro))
                     mro_ni = len(extras['noninteracting_medium'])
@@ -189,7 +198,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
 
                 for org1, values in list(scs.items()):
                     if values is None:
-                        scs_data.append((comm_id, medium_id, org1, 'Failed', 'Failed'))
+                        scs_data.append((comm_id, medium_id, org1, None, None))
                     else:
                         for org2, value in list(values.items()):
                             scs_data.append((comm_id, medium_id, org1, org2, value))
@@ -204,7 +213,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
 
                 for org, values in list(mus.items()):
                     if values is None:
-                        mus_data.append((comm_id, medium_id, org, 'Failed', 'Failed'))
+                        mus_data.append((comm_id, medium_id, org, None, None))
                     else:
                         metabolites.update(list(values.keys()))
                         for met, value in list(values.items()):
@@ -219,7 +228,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
 
                 for org, values in list(mps.items()):
                     if values is None:
-                        mps_data.append((comm_id, medium_id, org, 'Failed', 'Failed'))
+                        mps_data.append((comm_id, medium_id, org, None, None))
                     else:
                         metabolites.update(list(values.keys()))
                         for met, value in list(values.items()):
@@ -233,7 +242,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                         if org1 == org2:
                             continue
                         if scs[org1] is None or mus[org1] is None or mps[org2] is None:
-                            smt_data.append((comm_id, medium_id, org1, org2, 'Failed', 'Failed'))
+                            smt_data.append((comm_id, medium_id, org1, org2, None, None))
                         else:
                             for met in sorted(metabolites):
                                 smt = scs[org1][org2] * mus[org1].get(met, 0) * mps[org2].get(met, 0)
@@ -241,7 +250,7 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                                 smt_total = smt if smt_total is None else smt_total + smt
 
                 if smt_total is None:
-                    smt_global.append((comm_id, medium_id, 'Failed'))
+                    smt_global.append((comm_id, medium_id, None))
                 else:
                     smt_global.append((comm_id, medium_id, smt_total))
 
@@ -344,8 +353,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.media and not args.mediadb:
-        parser.error('Please provide media library file with --mediadb')
+#    if args.media and not args.mediadb:
+#        parser.error('Please provide media library file with --mediadb')
 
     if not args.scores:
         scores = SCORES
