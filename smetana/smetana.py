@@ -13,7 +13,6 @@ from warnings import warn
 from functools import reduce
 
 
-
 def species_coupling_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6,
                            use_pool=False):
     """
@@ -116,8 +115,7 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
 
 
 def metabolite_uptake_score(community, environment=None, min_mol_weight=False, min_growth=0.1, max_uptake=10.0,
-                            abstol=1e-6, validate=False, n_solutions=100, pool_gap=0.5, verbose=True,
-                            exclude=None):  #TODO: implement excluded
+                            abstol=1e-6, validate=False, n_solutions=100, pool_gap=0.5, verbose=True):
     """
     Calculate frequency of metabolite requirement for species growth
 
@@ -157,6 +155,7 @@ def metabolite_uptake_score(community, environment=None, min_mol_weight=False, m
 
         if medium_list:
             counter = Counter(chain(*medium_list))
+
             scores[org_id] = {cnm.original_metabolite: counter[ex] / len(medium_list)
                               for ex, cnm in exchange_rxns.items()}
         else:
@@ -167,7 +166,7 @@ def metabolite_uptake_score(community, environment=None, min_mol_weight=False, m
     return scores
 
 
-def metabolite_production_score(community, environment=None, abstol=1e-3, exclude=None): #TODO: implement excluded
+def metabolite_production_score(community, environment=None, abstol=1e-3):
     """
     Discover metabolites which species can produce in community
 
@@ -286,12 +285,14 @@ def mip_score(community, environment=None, min_mol_weight=False, min_growth=0.1,
 
     score = len(noninteracting_medium) - len(interacting_medium)
 
-    difference = set(noninteracting_medium) - set(interacting_medium)
-    difference = ','.join(r_id[7:-7] for r_id in sorted(difference))
+    # difference = set(noninteracting_medium) - set(interacting_medium)
+    # difference = ','.join(r_id[7:-7] for r_id in sorted(difference))
+    #
+    # extras = {'noninteracting_medium': noninteracting_medium, 'interacting_medium': interacting_medium,
+    #           'noninteracting_solution': sol1, 'interacting_solution': sol2,
+    #           'difference': difference}
 
-    extras = {'noninteracting_medium': noninteracting_medium, 'interacting_medium': interacting_medium,
-              'noninteracting_solution': sol1, 'interacting_solution': sol2,
-              'difference': difference}
+    extras = None
 
     return score, extras
 
@@ -374,16 +375,18 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
 
     # Average resource overlap calculation
 
-    repeated = [x[2:-2] for org_id in community.organisms for x in individual_media[org_id]]
-    freqs = [(x-1)/(len(community.organisms)-1) if len(community.organisms) > 1 else 0
-             for x in Counter(repeated).values()]
-    aro = sum(freqs) / len(freqs)
-    counts = str(dict(Counter(repeated)))
+    # repeated = [x[2:-2] for org_id in community.organisms for x in individual_media[org_id]]
+    # freqs = [(x-1)/(len(community.organisms)-1) if len(community.organisms) > 1 else 0
+    #          for x in Counter(repeated).values()]
+    # aro = sum(freqs) / len(freqs)
+    # counts = str(dict(Counter(repeated)))
+    #
+    # extras = {'noninteracting_medium': noninteracting_medium, 'individual_media': individual_media,
+    #           'pairwise': pairwise, 'solutions': solutions,
+    #           'numerator': numerator, 'denominator': denominator, 'union': union,
+    #           'aro': aro, 'counts': counts}
 
-    extras = {'noninteracting_medium': noninteracting_medium, 'individual_media': individual_media,
-              'pairwise': pairwise, 'solutions': solutions,
-              'numerator': numerator, 'denominator': denominator, 'union': union,
-              'aro': aro, 'counts': counts}
+    extras = None
 
     return score, extras
 

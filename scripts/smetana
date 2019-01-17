@@ -12,15 +12,6 @@ from framed import load_cbmodel, Community, Environment, set_default_solver
 from framed.experimental.medium import load_media_db
 from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score, minimal_environment
 
-SCORES = {
-    'mip',
-    'mro',
-    'scs',
-    'mus',
-    'mps',
-    'smetana'
-}
-
 
 def extract_id_from_filepath(filepath):
     filename = os.path.basename(filepath)
@@ -60,7 +51,7 @@ def load_communities(filepath):
     return comm_dict
 
 
-def main(models, communities=None, scores=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
+def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
          ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None):
 
     # load models
@@ -107,25 +98,15 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
     if exclude:
         df = pd.read_csv(exclude, header=None)
         excluded_mets = set(df[0])
+        exclude_bigg = {'M_{}_e'.format(x) for x in excluded_mets}
     else:
         excluded_mets = set()
+        exclude_bigg = set()
 
     # compute scores
 
-    if scores is None:
-        scores = SCORES
-    elif 'smetana' in scores:
-        scores.update({'scs', 'mps', 'mus'})
-
     global_data = []
-    detailed_data = []
-    mip_data = []
-    mro_data = []
-    scs_data = []
-    mps_data = []
-    mus_data = []
     smt_data = []
-    smt_global = []
 
     for comm_id, organisms in list(comm_dict.items()):
 
@@ -146,162 +127,83 @@ def main(models, communities=None, scores=None, output=None, flavor=None, media=
                 env = Environment.complete(community.merged)
                 medium_id = 'complete'
 
-            global_data.append((comm_id, medium_id, len(organisms)))
-            detailed_data.append((comm_id, medium_id))
-
-            metabolites = set()
-
-            if 'mip' in scores:
+            if mode == "global":
 
                 if verbose:
                     print('Running MIP for community {} on medium {}...'.format(comm_id, medium_id))
 
                 mip, extras = mip_score(community, environment=env, verbose=verbose,
                                         min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
-                if mip is None:
-#                    mip_data.append((comm_id, medium_id, None))
-                    mip_data.append((comm_id, medium_id, None, None, None, None, None))
-                else:
-#                    mip_data.append((comm_id, medium_id, mip))
-                    nip = mip / len(extras['noninteracting_medium'])
-                    mip_ni = len(extras['noninteracting_medium'])
-                    mip_i = len(extras['interacting_medium'])
-                    mip_diff = extras['difference']
-                    mip_data.append((comm_id, medium_id, mip, nip, mip_ni, mip_i, mip_diff))
 
-            if 'mro' in scores:
+                if mip is None:
+                    mip = 'n/a'
 
                 if verbose:
                     print('Running MRO for community {} on medium {}...'.format(comm_id, medium_id))
 
                 mro, extras = mro_score(community, environment=env, verbose=verbose,
                                         min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
-                if mro is None:
-#                    mro_data.append((comm_id, medium_id, None))
-                    mro_data.append((comm_id, medium_id, None, None, None, None, None, None, None))
-                else:
-#                    mro_data.append((comm_id, medium_id, mro))
-                    mro_ni = len(extras['noninteracting_medium'])
-                    mro_num = extras['numerator']
-                    mro_den = extras['denominator']
-                    mro_union = extras['union']
-                    aro = extras['aro']
-                    mro_counts = extras['counts']
-                    mro_data.append((comm_id, medium_id, mro, mro_ni, mro_num, mro_den, mro_union, aro, mro_counts))
 
-            if 'scs' in scores:
+                if mro is None:
+                    mro = 'n/a'
+
+                global_data.append((comm_id, medium_id, len(organisms), mip, mro))
+
+            if mode == "detailed":
 
                 if verbose:
                     print('Running SCS for community {} on medium {}...'.format(comm_id, medium_id))
 
                 scs = species_coupling_score(community, environment=env, verbose=verbose)
 
-                for org1, values in list(scs.items()):
-                    if values is None:
-                        scs_data.append((comm_id, medium_id, org1, None, None))
-                    else:
-                        for org2, value in list(values.items()):
-                            scs_data.append((comm_id, medium_id, org1, org2, value))
-
-            if 'mus' in scores:
-
                 if verbose:
                     print('Running MUS for community {} on medium {}...'.format(comm_id, medium_id))
 
                 mus = metabolite_uptake_score(community, environment=env, verbose=verbose,
-                                              min_mol_weight=min_mol_weight, exclude=excluded_mets)
-
-                for org, values in list(mus.items()):
-                    if values is None:
-                        mus_data.append((comm_id, medium_id, org, None, None))
-                    else:
-                        metabolites.update(list(values.keys()))
-                        for met, value in list(values.items()):
-                            mus_data.append((comm_id, medium_id, org, met, value))
-
-            if 'mps' in scores:
-
+                                              min_mol_weight=min_mol_weight)
                 if verbose:
                     print('Running MPS for community {} on medium {}...'.format(comm_id, medium_id))
 
-                mps = metabolite_production_score(community, environment=env, exclude=excluded_mets)
+                mps = metabolite_production_score(community, environment=env)
 
-                for org, values in list(mps.items()):
-                    if values is None:
-                        mps_data.append((comm_id, medium_id, org, None, None))
-                    else:
-                        metabolites.update(list(values.keys()))
-                        for met, value in list(values.items()):
-                            mps_data.append((comm_id, medium_id, org, met, value))
+                pairs = [(org1, org2) for org1 in organisms for org2 in organisms if org1 != org2]
 
-            if 'smetana' in scores:
-                smt_total = None
+                for org1, org2 in pairs:
+                    if scs[org1] is None:
+                        continue
+                    if mus[org1] is None:
+                        continue
+                    if mps[org2] is None:
+                        continue
 
-                for org1 in organisms:
-                    for org2 in organisms:
-                        if org1 == org2:
-                            continue
-                        if scs[org1] is None or mus[org1] is None or mps[org2] is None:
-                            smt_data.append((comm_id, medium_id, org1, org2, None, None))
-                        else:
-                            for met in sorted(metabolites):
-                                smt = scs[org1][org2] * mus[org1].get(met, 0) * mps[org2].get(met, 0)
-                                smt_data.append((comm_id, medium_id, org1, org2, met, smt))
-                                smt_total = smt if smt_total is None else smt_total + smt
+                    metabolites = (set(mus[org1]) | set(mus[org2])) - exclude_bigg
 
-                if smt_total is None:
-                    smt_global.append((comm_id, medium_id, None))
-                else:
-                    smt_global.append((comm_id, medium_id, smt_total))
+                    for met in sorted(metabolites):
+                        scs_o1_o2 = scs[org1][org2]
+                        mus_o1_met = mus[org1].get(met, 0)
+                        mps_o2_met = mps[org2].get(met, 0)
+                        smt = scs_o1_o2 * mus_o1_met * mps_o2_met
+                        smt_data.append((comm_id, medium_id, org1, org2, met, scs_o1_o2, mus_o1_met, mps_o2_met, smt))
 
     # export results
 
-    global_df = pd.DataFrame(global_data, columns=['community', 'medium', 'size'])
-    detailed_df = pd.DataFrame(detailed_data, columns=['community', 'medium'])
-
-    if 'mip' in scores:
-#        mip_df = pd.DataFrame(mip_data, columns=['community', 'medium', 'mip'])
-        mip_df = pd.DataFrame(mip_data, columns=['community', 'medium', 'mip',
-                                                 'nip', 'mip_ni', 'mip_i', 'mip_diff'])
-        global_df = pd.merge(global_df, mip_df)
-
-    if 'mro' in scores:
-        mro_df = pd.DataFrame(mro_data, columns=['community', 'medium', 'mro',
-                                                 'mro_ni', 'mro_num', 'mro_den', 'mro_union', 'aro', 'mro_counts'])
-        global_df = pd.merge(global_df, mro_df)
-
-    if 'scs' in scores:
-        scs_df = pd.DataFrame(scs_data, columns=['community', 'medium', 'receiver', 'donor', 'scs'])
-        detailed_df = pd.merge(detailed_df, scs_df)
-
-    if 'mus' in scores:
-        mus_df = pd.DataFrame(mus_data, columns=['community', 'medium', 'receiver', 'compound', 'mus'])
-        detailed_df = pd.merge(detailed_df, mus_df)
-
-    if 'mps' in scores:
-        mps_df = pd.DataFrame(mps_data, columns=['community', 'medium', 'donor', 'compound', 'mps'])
-        detailed_df = pd.merge(detailed_df, mps_df)
-
-    if 'smetana' in scores:
-        smt_df = pd.DataFrame(smt_data, columns=['community', 'medium', 'receiver', 'donor', 'compound', 'smetana'])
-        detailed_df = pd.merge(detailed_df, smt_df)
-
-        smt_gdf = pd.DataFrame(smt_global, columns=['community', 'medium', 'smetana'])
-        global_df = pd.merge(global_df, smt_gdf)
-
     prefix = output + '_' if output else ''
 
-    if len(global_df.columns) > 3:
+    if mode == "global":
+
+        global_df = pd.DataFrame(global_data, columns=['community', 'medium', 'size', "mip", "mro"])
         global_df.sort_values(['community', 'medium'], inplace=True)
         global_df.to_csv(prefix + 'global.tsv', sep='\t', index=False)
 
-    if len(detailed_df.columns) > 2:
-        if 'smetana' in detailed_df.columns and not zeros:
-            detailed_df = detailed_df.query('smetana > 0')
-        col_order = ['community', 'medium', 'receiver', 'donor', 'compound', 'scs', 'mus', 'mps', 'smetana']
-        cols = [x[1] for x in sorted((col_order.index(col), col) for col in detailed_df.columns)]
-        detailed_df = detailed_df[cols].sort_values(cols)
-        detailed_df.to_csv(prefix + 'detailed.tsv', sep='\t', index=False)
+    if mode == "detailed":
+
+        columns = ['community', 'medium', 'receiver', 'donor', 'compound', 'scs', 'mus', 'mps', 'smetana']
+        smt_df = pd.DataFrame(smt_data, columns=columns)
+
+        if not zeros:
+            smt_df = smt_df.query('smetana > 0')
+
+        smt_df.to_csv(prefix + 'detailed.tsv', sep='\t', index=False)
 
     if verbose:
         print('Done.')
@@ -342,13 +244,17 @@ if __name__ == '__main__':
     parser.add_argument('--flavor', help="Expected SBML flavor of the input files.")
     parser.add_argument('-m', '--media', dest='media', help="Run SMETANA for given media (comma-separated).")
     parser.add_argument('--mediadb', help="Media database file")
-    parser.add_argument('-s', '--scores', dest='scores', help="Only run specified scores (comma-separated).")
+
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('-g', '--global', dest='mip_mro', action='store_true', help="Run global analysis with MIP/MRO (faster)")
+    mode.add_argument('-d', '--detailed',  dest='smetana', action='store_true', help="Run detailed SMETANA analysis (slower)")
+
     parser.add_argument('-v', '--verbose', action='store_true', dest='verbose', help="Switch to verbose mode")
     parser.add_argument('-z', '--zeros', action='store_true', dest='zeros', help="Include entries with zero score.")
     parser.add_argument('--solver', help="Change default solver (current options: 'gurobi', 'cplex').")
     parser.add_argument('--ext', help="Extracellular compartment identifier in the models (default 'C_e').")
     parser.add_argument('--molweight', action='store_true', help="Use molecular weight minimization (recomended).")
-    parser.add_argument('--lp', action='store_true', help="Compute MIP and MRO using an LP formulation (faster).")
+    parser.add_argument('--lp', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--exclude', help="List of compounds to exclude from calculations (e.g.: inorganic compounds).")
 
     args = parser.parse_args()
@@ -356,13 +262,10 @@ if __name__ == '__main__':
 #    if args.media and not args.mediadb:
 #        parser.error('Please provide media library file with --mediadb')
 
-    if not args.scores:
-        scores = SCORES
+    if args.smetana:
+        mode = "detailed"
     else:
-        scores = set(args.scores.lower().split(','))
-        unknown = scores - SCORES
-        if unknown:
-            parser.error("Invalid algorithms {}. Valid values are: {}.".format(unknown, SCORES))
+        mode = "global"
 
     if args.solver:
         set_default_solver(args.solver)
@@ -372,7 +275,7 @@ if __name__ == '__main__':
     main(
         models=args.models,
         communities=args.communities,
-        scores=scores,
+        mode=mode,
         output=args.output,
         flavor=args.flavor,
         media=args.media,
