@@ -384,7 +384,7 @@ def minimal_environment(community, direction=-1, min_mol_weight=False, min_growt
 
     ex_rxns, sol = minimal_medium(community.merged, direction=direction, exchange_reactions=exch_reactions,
                                               min_mass_weight=min_mol_weight, min_growth=min_growth, milp=(not use_lp),
-                                              max_uptake=max_uptake, validate=validate, warnings=verbose)
+                                              max_uptake=max_uptake, validate=validate, warnings=False)
 
     if ex_rxns is None:
         if verbose:
