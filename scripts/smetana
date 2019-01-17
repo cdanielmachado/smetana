@@ -52,7 +52,7 @@ def load_communities(filepath):
 
 
 def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
-         ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None):
+         ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False):
 
     # load models
 
@@ -107,6 +107,7 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
     global_data = []
     smt_data = []
+    debug_data = []
 
     for comm_id, organisms in list(comm_dict.items()):
 
@@ -138,6 +139,12 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
                 if mip is None:
                     mip = 'n/a'
 
+                if debug and extras is not None:
+                    mip_ni = ','.join(sorted(extras['noninteracting_medium']))
+                    mip_i = ','.join(sorted(extras['interacting_medium']))
+                    debug_data.append((comm_id, medium_id, 'mip', 'ni', mip_ni))
+                    debug_data.append((comm_id, medium_id, 'mip', 'i', mip_i))
+
                 if verbose:
                     print('Running MRO for community {} on medium {}...'.format(comm_id, medium_id))
 
@@ -146,6 +153,13 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
                 if mro is None:
                     mro = 'n/a'
+
+                if debug and extras is not None:
+                    comm_medium = ','.join(sorted(extras['comm_medium']))
+                    debug_data.append((comm_id, medium_id, 'mro', 'comm', comm_medium))
+                    for org, values in extras['individual_media'].items():
+                        org_medium = ','.join(sorted(values))
+                        debug_data.append((comm_id, medium_id, 'mro', org, org_medium))
 
                 global_data.append((comm_id, medium_id, len(organisms), mip, mro))
 
@@ -192,8 +206,11 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
     if mode == "global":
 
         global_df = pd.DataFrame(global_data, columns=['community', 'medium', 'size', "mip", "mro"])
-        global_df.sort_values(['community', 'medium'], inplace=True)
         global_df.to_csv(prefix + 'global.tsv', sep='\t', index=False)
+
+        if debug:
+            debug_df = pd.DataFrame(debug_data, columns=['community', 'medium', 'key1', "key2", "data"])
+            debug_df.to_csv(prefix + 'debug.tsv', sep='\t', index=False)
 
     if mode == "detailed":
 
@@ -256,11 +273,9 @@ if __name__ == '__main__':
     parser.add_argument('--molweight', action='store_true', help="Use molecular weight minimization (recomended).")
     parser.add_argument('--lp', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--exclude', help="List of compounds to exclude from calculations (e.g.: inorganic compounds).")
+    parser.add_argument('--debug', action='store_true', help=argparse.SUPPRESS)
 
     args = parser.parse_args()
-
-#    if args.media and not args.mediadb:
-#        parser.error('Please provide media library file with --mediadb')
 
     if args.smetana:
         mode = "detailed"
@@ -285,7 +300,8 @@ if __name__ == '__main__':
         verbose=args.verbose,
         min_mol_weight=args.molweight,
         use_lp=args.lp,
-        exclude=args.exclude
+        exclude=args.exclude,
+        debug=args.debug,
     )
 
 
