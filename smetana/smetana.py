@@ -314,57 +314,38 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
         float: MRO score
     """
 
-#    noninteracting = community.copy(copy_models=False, interacting=False, create_biomass=True)
     exch_reactions = set(community.merged.get_exchange_reactions())
 
     if environment:
         environment.apply(community.merged, inplace=True, warning=False)
-#        environment.apply(noninteracting.merged, inplace=True, warning=False)
-        environment.apply(community.merged, inplace=True, warning=False)
         exch_reactions &= set(environment)
 
-    interacting_medium, sol = minimal_medium(community.merged, exchange_reactions=exch_reactions,
-#    noninteracting_medium, sol = minimal_medium(noninteracting.merged, exchange_reactions=exch_reactions,
-                                                direction=direction, min_mass_weight=min_mol_weight,
-                                                min_growth=min_growth, max_uptake=max_uptake, validate=validate,
-                                                warnings=False, milp=(not use_lp))
+    medium, sol = minimal_medium(community.merged, exchange_reactions=exch_reactions, direction=direction,
+                                 min_mass_weight=min_mol_weight, min_growth=min_growth, max_uptake=max_uptake,
+                                 validate=validate,  warnings=False, milp=(not use_lp))
 
     if sol.status != Status.OPTIMAL:
         if verbose:
             warn('MRO: Failed to find a valid solution for non-interacting community')
         return None, None
 
-    # anabiotic environment is limited to non-interacting community minimal media
-#    noninteracting_env = Environment.from_reactions(noninteracting_medium, max_uptake=max_uptake)
-#    noninteracting_env.apply(noninteracting.merged, inplace=True)
-
-    interacting_env = Environment.from_reactions(interacting_medium, max_uptake=max_uptake)
+    interacting_env = Environment.from_reactions(medium, max_uptake=max_uptake)
     interacting_env.apply(community.merged, inplace=True)
 
     if exclude is None:
         exclude = {}
 
-#    noninteracting_medium = {x[7:-7] for x in noninteracting_medium} - exclude
-    interacting_medium = {x[7:-7] for x in interacting_medium} - exclude
-
+    medium = {x[7:-7] for x in medium} - exclude
     individual_media = {}
-
-#    solver = solver_instance(noninteracting.merged)
-#    for org_id in noninteracting.organisms:
-#        biomass_reaction = noninteracting.organisms_biomass_reactions[org_id]
-#        noninteracting.merged.biomass_reaction = biomass_reaction
-#        org_noninteracting_exch = noninteracting.organisms_exchange_reactions[org_id]
-
-#        medium, sol = minimal_medium(noninteracting.merged, exchange_reactions=org_noninteracting_exch, direction=direction,
-
     min_growth_indiv = min_growth / len(community.organisms)
     solver = solver_instance(community.merged)
+
     for org_id in community.organisms:
         biomass_reaction = community.organisms_biomass_reactions[org_id]
         community.merged.biomass_reaction = biomass_reaction
         org_interacting_exch = community.organisms_exchange_reactions[org_id]
 
-        medium, sol = minimal_medium(community.merged, exchange_reactions=org_interacting_exch, direction=direction,
+        medium_i, sol = minimal_medium(community.merged, exchange_reactions=org_interacting_exch, direction=direction,
                                      min_mass_weight=min_mol_weight, min_growth=min_growth_indiv, max_uptake=max_uptake,
                                      validate=validate, solver=solver, warnings=False, milp=(not use_lp))
 
@@ -372,10 +353,8 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
             warn('MRO: Failed to find a valid solution for: ' + org_id)
             return None, None
 
-#        individual_media[org_id] = {org_noninteracting_exch[r].original_metabolite[2:-2] for r in medium} - exclude
-        individual_media[org_id] = {org_interacting_exch[r].original_metabolite[2:-2] for r in medium} - exclude
+        individual_media[org_id] = {org_interacting_exch[r].original_metabolite[2:-2] for r in medium_i} - exclude
 
-#    pairwise = {(o1, o2): individual_media[o1] & individual_media[o2] for o1, o2 in combinations(noninteracting.organisms, 2)}
     pairwise = {(o1, o2): individual_media[o1] & individual_media[o2] for o1, o2 in combinations(community.organisms, 2)}
 
     numerator = sum(map(len, pairwise.values())) / len(pairwise) if len(pairwise) != 0 else 0
@@ -383,8 +362,7 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
     score = numerator / denominator if denominator != 0 else None
 
     extras = {
-#        'comm_medium': noninteracting_medium,
-        'comm_medium': interacting_medium,
+        'community_medium': medium,
         'individual_media': individual_media
     }
 

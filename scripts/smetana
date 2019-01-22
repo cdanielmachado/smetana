@@ -155,8 +155,8 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
                     mro = 'n/a'
 
                 if debug and extras is not None:
-                    comm_medium = ','.join(sorted(extras['comm_medium']))
-                    debug_data.append((comm_id, medium_id, 'mro', 'comm', comm_medium))
+                    comm_medium = ','.join(sorted(extras['community_medium']))
+                    debug_data.append((comm_id, medium_id, 'mro', 'community', comm_medium))
                     for org, values in extras['individual_media'].items():
                         org_medium = ','.join(sorted(values))
                         debug_data.append((comm_id, medium_id, 'mro', org, org_medium))
