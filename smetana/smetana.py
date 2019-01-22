@@ -151,7 +151,7 @@ def metabolite_uptake_score(community, environment=None, min_mol_weight=False, m
                                            min_mass_weight=min_mol_weight, min_growth=min_growth,
                                            n_solutions=n_solutions, max_uptake=max_uptake, validate=validate,
                                            abstol=abstol, use_pool=True, pool_gap=pool_gap, solver=solver,
-                                           warnings=verbose)
+                                           warnings=False)
 
         if medium_list:
             counter = Counter(chain(*medium_list))
@@ -259,7 +259,7 @@ def mip_score(community, environment=None, min_mol_weight=False, min_growth=0.1,
     noninteracting_medium, sol1 = minimal_medium(noninteracting.merged, exchange_reactions=exch_reactions,
                                                  direction=direction, min_mass_weight=min_mol_weight,
                                                  min_growth=min_growth, max_uptake=max_uptake, validate=validate,
-                                                 warnings=verbose, milp=(not use_lp))
+                                                 warnings=False, milp=(not use_lp))
     if noninteracting_medium is None:
         if verbose:
             warn('MIP: Failed to find a valid solution for non-interacting community')
@@ -271,7 +271,7 @@ def mip_score(community, environment=None, min_mol_weight=False, min_growth=0.1,
 
     interacting_medium, sol2 = minimal_medium(community.merged, direction=direction, exchange_reactions=noninteracting_medium,
                                               min_mass_weight=min_mol_weight, min_growth=min_growth, milp=(not use_lp),
-                                              max_uptake=max_uptake, validate=validate, warnings=verbose)
+                                              max_uptake=max_uptake, validate=validate, warnings=False)
 
     if interacting_medium is None:
         if verbose:
@@ -327,7 +327,7 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
 #    noninteracting_medium, sol = minimal_medium(noninteracting.merged, exchange_reactions=exch_reactions,
                                                 direction=direction, min_mass_weight=min_mol_weight,
                                                 min_growth=min_growth, max_uptake=max_uptake, validate=validate,
-                                                warnings=verbose, milp=(not use_lp))
+                                                warnings=False, milp=(not use_lp))
 
     if sol.status != Status.OPTIMAL:
         if verbose:
@@ -357,6 +357,7 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
 
 #        medium, sol = minimal_medium(noninteracting.merged, exchange_reactions=org_noninteracting_exch, direction=direction,
 
+    min_growth_indiv = min_growth / len(community.organisms)
     solver = solver_instance(community.merged)
     for org_id in community.organisms:
         biomass_reaction = community.organisms_biomass_reactions[org_id]
@@ -364,8 +365,8 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
         org_interacting_exch = community.organisms_exchange_reactions[org_id]
 
         medium, sol = minimal_medium(community.merged, exchange_reactions=org_interacting_exch, direction=direction,
-                                     min_mass_weight=min_mol_weight, min_growth=min_growth, max_uptake=max_uptake,
-                                     validate=validate, solver=solver, warnings=verbose, milp=(not use_lp))
+                                     min_mass_weight=min_mol_weight, min_growth=min_growth_indiv, max_uptake=max_uptake,
+                                     validate=validate, solver=solver, warnings=False, milp=(not use_lp))
 
         if sol.status != Status.OPTIMAL:
             warn('MRO: Failed to find a valid solution for: ' + org_id)
