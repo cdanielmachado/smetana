@@ -64,7 +64,7 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
             return
 
     if not flavor:
-        flavor = 'cobra'
+        flavor = 'fbc2'
 
     # load models and communities
 

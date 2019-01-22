@@ -10,7 +10,6 @@ from framed import Environment
 from collections import Counter
 from itertools import combinations, chain
 from warnings import warn
-from functools import reduce
 
 
 def species_coupling_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6,
