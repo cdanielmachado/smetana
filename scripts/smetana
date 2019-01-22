@@ -258,7 +258,7 @@ if __name__ == '__main__':
     ))
 
     parser.add_argument('-o', '--output', dest='output', help="Prefix for output file(s).")
-    parser.add_argument('--flavor', help="Expected SBML flavor of the input files.")
+    parser.add_argument('--flavor', help="Expected SBML flavor of the input files (cobra or fbc2).")
     parser.add_argument('-m', '--media', dest='media', help="Run SMETANA for given media (comma-separated).")
     parser.add_argument('--mediadb', help="Media database file")
 
