@@ -11,7 +11,7 @@ from collections import OrderedDict
 from framed import load_cbmodel, Community, Environment, set_default_solver
 from framed.experimental.medium import load_media_db
 from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score, minimal_environment
-
+from random import sample
 
 def extract_id_from_filepath(filepath):
     filename = os.path.basename(filepath)
@@ -45,7 +45,7 @@ def load_models(models, flavor, pre_filter=None):
     return model_dict
 
 
-def load_communities(models, communities, flavor, verbose):
+def load_communities(models, communities, other, flavor, verbose):
 
     if len(models) == 1 and '*' in models[0]:
         pattern = models[0]
@@ -56,26 +56,38 @@ def load_communities(models, communities, flavor, verbose):
     if not flavor:
         flavor = 'fbc2'
 
+    if other is not None:
+        df = pd.read_csv(other, header=None)
+        other_models = set(df[0])
+    else:
+        other_models = set()
+
     if communities is not None:
         df = pd.read_csv(communities, sep='\t', header=None)
         comm_dict = OrderedDict((name, group[1].tolist()) for name, group in df.groupby(0))
         pre_filter = {org_id for organisms in list(comm_dict.values()) for org_id in organisms}
+        pre_filter |= other_models
 
         if verbose:
-            print("Loading models...".format(len(pre_filter)))
+            print("Loading models {}...".format(len(pre_filter)))
 
         model_dict = load_models(models, flavor, pre_filter)
     else:
         if verbose:
-            print("Loading models...".format(len(models)))
+            print("Loading models {}...".format(len(models)))
 
         model_dict = load_models(models, flavor)
         comm_dict = {'all': list(model_dict.keys())}
 
-    return model_dict, comm_dict
+    if other:
+        missing = other_models - set(model_dict.keys())
+        if missing:
+            print("Warning: {} models in perturbation file missing.".format(len(missing)))
+
+    return model_dict, comm_dict, other_models
 
 
-def load_media(media, mediadb, exclude):
+def load_media(media, mediadb, exclude, other):
 
     media_db = None
 
@@ -95,7 +107,13 @@ def load_media(media, mediadb, exclude):
     else:
         excluded_mets = set()
 
-    return media, media_db, excluded_mets
+    if other:
+        df = pd.read_csv(exclude, header=None)
+        other_mets = set(df[0])
+    else:
+        other_mets = set()
+
+    return media, media_db, excluded_mets, other_mets
 
 
 def define_environment(medium, media_db, community, verbose, min_mol_weight, use_lp):
@@ -199,6 +217,29 @@ def run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, v
     return smt_data
 
 
+def run_abiotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p):
+    data = run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight)
+
+    compounds = set(env.get_compounds())
+    other_mets -= compounds
+
+    if len(other_mets) < p:
+        raise RuntimeError("Insufficient compounds ({}) to perform ({}) perturbations.".format(len(other_mets), p))
+
+    for i in range(n):
+        new_compounds = sample(other_mets, p) + sample(compounds, len(compounds) - p)
+        new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'")
+        new_id = "{}_p_{}".format(medium_id, i+1)
+        entries = run_detailed(comm_id, community, organisms, new_id, excluded_mets, new_env, verbose, min_mol_weight)
+        data.extend(entries)
+
+    return data
+
+
+def run_biotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight, other_models, n, p):
+    return 0
+
+
 def export_results(mode, output, data, debug_data, zeros):
 
     prefix = output + '_' if output else ''
@@ -224,11 +265,12 @@ def export_results(mode, output, data, debug_data, zeros):
 
 
 def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
-         ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False, n=1, p=1):
+         ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
+         other=None, n=1, p=1):
 
-    model_dict, comm_dict = load_communities(models, communities, flavor, verbose)
+    model_dict, comm_dict, other_models = load_communities(models, communities, other, flavor, verbose)
 
-    media, media_db, excluded_mets = load_media(media, mediadb, exclude)
+    media, media_db, excluded_mets, other_mets = load_media(media, mediadb, exclude, other)
 
     data = []
     debug_data = []
@@ -247,7 +289,16 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
                                                      verbose, min_mol_weight, use_lp, debug)
 
             if mode == "detailed":
-                entries = run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight)
+                entries = run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, verbose,
+                                       min_mol_weight)
+
+            if mode == "abiotic":
+                entries = run_abiotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose,
+                                      min_mol_weight, other_mets, n, p)
+
+            if mode == "biotic":
+                entries = run_biotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose,
+                                     min_mol_weight, other_models, n, p)
 
             data.extend(entries)
 
@@ -318,12 +369,17 @@ if __name__ == '__main__':
 
     if args.smetana:
         mode = "detailed"
+        other = None
     elif args.abiotic:
         mode = "abiotic"
-    elif args.abiotic:
+        other = args.abiotic
+    elif args.biotic:
         mode = "biotic"
+        other = args.abiotic
     else:
         mode = "global"
+        other = None
+
 
     if args.solver:
         set_default_solver(args.solver)
@@ -345,6 +401,7 @@ if __name__ == '__main__':
         use_lp=args.lp,
         exclude=args.exclude,
         debug=args.debug,
+        other=other,
         p=args.p,
         n=args.n,
     )
