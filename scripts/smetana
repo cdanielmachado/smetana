@@ -45,31 +45,20 @@ def load_models(models, flavor, pre_filter=None):
     return model_dict
 
 
-def load_communities(filepath):
-    df = pd.read_csv(filepath, sep='\t', header=None)
-    comm_dict = OrderedDict((name, group[1].tolist()) for name, group in df.groupby(0))
-    return comm_dict
-
-
-def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
-         ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False):
-
-    # load models
+def load_communities(models, communities, flavor, verbose):
 
     if len(models) == 1 and '*' in models[0]:
         pattern = models[0]
         models = glob.glob(pattern)
         if len(models) == 0:
-            print("No files found: {}".format(pattern))
-            return
+            raise RuntimeError("No files found: {}".format(pattern))
 
     if not flavor:
         flavor = 'fbc2'
 
-    # load models and communities
-
     if communities is not None:
-        comm_dict = load_communities(communities)
+        df = pd.read_csv(communities, sep='\t', header=None)
+        comm_dict = OrderedDict((name, group[1].tolist()) for name, group in df.groupby(0))
         pre_filter = {org_id for organisms in list(comm_dict.values()) for org_id in organisms}
 
         if verbose:
@@ -83,7 +72,12 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
         model_dict = load_models(models, flavor)
         comm_dict = {'all': list(model_dict.keys())}
 
-    # load media
+    return model_dict, comm_dict
+
+
+def load_media(media, mediadb, exclude):
+
+    media_db = None
 
     if media:
         if media != "minimal":
@@ -98,15 +92,145 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
     if exclude:
         df = pd.read_csv(exclude, header=None)
         excluded_mets = set(df[0])
-        exclude_bigg = {'M_{}_e'.format(x) for x in excluded_mets}
     else:
         excluded_mets = set()
-        exclude_bigg = set()
 
-    # compute scores
+    return media, media_db, excluded_mets
+
+
+def define_environment(medium, media_db, community, verbose, min_mol_weight, use_lp):
+
+    if medium == "minimal" and (media_db is None or medium not in media_db):
+        env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp)
+        if not env:
+            return
+        medium_id = "minimal"
+    elif medium:
+        env = Environment.from_compounds(media_db[medium], exchange_format="'R_EX_M_{}_e_pool'")
+        medium_id = medium
+    else:
+        env = Environment.complete(community.merged)
+        medium_id = 'complete'
+
+    return medium_id, env
+
+
+def run_global(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight, use_lp, debug):
 
     global_data = []
+    debug_data = []
+
+    if verbose:
+        print('Running MIP for community {} on medium {}...'.format(comm_id, medium_id))
+
+    mip, extras = mip_score(community, environment=env, verbose=verbose,
+                            min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
+
+    if mip is None:
+        mip = 'n/a'
+
+    if debug and extras is not None:
+        mip_ni = ','.join(sorted(extras['noninteracting_medium']))
+        mip_i = ','.join(sorted(extras['interacting_medium']))
+        debug_data.append((comm_id, medium_id, 'mip', 'ni', mip_ni))
+        debug_data.append((comm_id, medium_id, 'mip', 'i', mip_i))
+
+    if verbose:
+        print('Running MRO for community {} on medium {}...'.format(comm_id, medium_id))
+
+    mro, extras = mro_score(community, environment=env, verbose=verbose,
+                            min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
+
+    if mro is None:
+        mro = 'n/a'
+
+    if debug and extras is not None:
+        comm_medium = ','.join(sorted(extras['community_medium']))
+        debug_data.append((comm_id, medium_id, 'mro', 'community', comm_medium))
+        for org, values in extras['individual_media'].items():
+            org_medium = ','.join(sorted(values))
+            debug_data.append((comm_id, medium_id, 'mro', org, org_medium))
+
+    global_data.append((comm_id, medium_id, len(organisms), mip, mro))
+
+    return global_data, debug_data
+
+
+def run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight):
+
     smt_data = []
+
+    exclude_bigg = {'M_{}_e'.format(x) for x in excluded_mets}
+
+    if verbose:
+        print('Running SCS for community {} on medium {}...'.format(comm_id, medium_id))
+
+    scs = species_coupling_score(community, environment=env, verbose=verbose)
+
+    if verbose:
+        print('Running MUS for community {} on medium {}...'.format(comm_id, medium_id))
+
+    mus = metabolite_uptake_score(community, environment=env, verbose=verbose,
+                                  min_mol_weight=min_mol_weight)
+    if verbose:
+        print('Running MPS for community {} on medium {}...'.format(comm_id, medium_id))
+
+    mps = metabolite_production_score(community, environment=env)
+
+    pairs = [(org1, org2) for org1 in organisms for org2 in organisms if org1 != org2]
+
+    for org1, org2 in pairs:
+        if scs[org1] is None:
+            continue
+        if mus[org1] is None:
+            continue
+        if mps[org2] is None:
+            continue
+
+        metabolites = (set(mus[org1]) | set(mus[org2])) - exclude_bigg
+
+        for met in sorted(metabolites):
+            scs_o1_o2 = scs[org1][org2]
+            mus_o1_met = mus[org1].get(met, 0)
+            mps_o2_met = mps[org2].get(met, 0)
+            smt = scs_o1_o2 * mus_o1_met * mps_o2_met
+            smt_data.append((comm_id, medium_id, org1, org2, met, scs_o1_o2, mus_o1_met, mps_o2_met, smt))
+
+    return smt_data
+
+
+def export_results(mode, output, data, debug_data, zeros):
+
+    prefix = output + '_' if output else ''
+
+    if mode == "global":
+
+        df = pd.DataFrame(data, columns=['community', 'medium', 'size', "mip", "mro"])
+        df.to_csv(prefix + 'global.tsv', sep='\t', index=False)
+
+        if len(debug_data) > 0:
+            df = pd.DataFrame(debug_data, columns=['community', 'medium', 'key1', "key2", "data"])
+            df.to_csv(prefix + 'debug.tsv', sep='\t', index=False)
+
+    if mode == "detailed":
+
+        columns = ['community', 'medium', 'receiver', 'donor', 'compound', 'scs', 'mus', 'mps', 'smetana']
+        df = pd.DataFrame(data, columns=columns)
+
+        if not zeros:
+            df = df.query('smetana > 0')
+
+        df.to_csv(prefix + 'detailed.tsv', sep='\t', index=False)
+
+
+def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
+         ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False, n=1, p=1):
+
+    model_dict, comm_dict = load_communities(models, communities, flavor, verbose)
+
+    media, media_db, excluded_mets = load_media(media, mediadb, exclude)
+
+    data = []
     debug_data = []
 
     for comm_id, organisms in list(comm_dict.items()):
@@ -116,111 +240,21 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
         for medium in media:
 
-            if medium == "minimal" and (mediadb is None or medium not in mediadb):
-                env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp)
-                if not env:
-                    return
-                medium_id = "minimal"
-            elif medium:
-                env = Environment.from_compounds(media_db[medium], exchange_format="'R_EX_M_{}_e_pool'")
-                medium_id = medium
-            else:
-                env = Environment.complete(community.merged)
-                medium_id = 'complete'
+            medium_id, env = define_environment(medium, media_db, community, verbose, min_mol_weight, use_lp)
 
             if mode == "global":
-
-                if verbose:
-                    print('Running MIP for community {} on medium {}...'.format(comm_id, medium_id))
-
-                mip, extras = mip_score(community, environment=env, verbose=verbose,
-                                        min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
-
-                if mip is None:
-                    mip = 'n/a'
-
-                if debug and extras is not None:
-                    mip_ni = ','.join(sorted(extras['noninteracting_medium']))
-                    mip_i = ','.join(sorted(extras['interacting_medium']))
-                    debug_data.append((comm_id, medium_id, 'mip', 'ni', mip_ni))
-                    debug_data.append((comm_id, medium_id, 'mip', 'i', mip_i))
-
-                if verbose:
-                    print('Running MRO for community {} on medium {}...'.format(comm_id, medium_id))
-
-                mro, extras = mro_score(community, environment=env, verbose=verbose,
-                                        min_mol_weight=min_mol_weight, use_lp=use_lp, exclude=excluded_mets)
-
-                if mro is None:
-                    mro = 'n/a'
-
-                if debug and extras is not None:
-                    comm_medium = ','.join(sorted(extras['community_medium']))
-                    debug_data.append((comm_id, medium_id, 'mro', 'community', comm_medium))
-                    for org, values in extras['individual_media'].items():
-                        org_medium = ','.join(sorted(values))
-                        debug_data.append((comm_id, medium_id, 'mro', org, org_medium))
-
-                global_data.append((comm_id, medium_id, len(organisms), mip, mro))
+                entries, debug_entries = run_global(comm_id, community, organisms, medium_id, excluded_mets, env,
+                                                     verbose, min_mol_weight, use_lp, debug)
 
             if mode == "detailed":
+                entries = run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight)
 
-                if verbose:
-                    print('Running SCS for community {} on medium {}...'.format(comm_id, medium_id))
+            data.extend(entries)
 
-                scs = species_coupling_score(community, environment=env, verbose=verbose)
+            if debug:
+                debug_data.extend(debug_entries)
 
-                if verbose:
-                    print('Running MUS for community {} on medium {}...'.format(comm_id, medium_id))
-
-                mus = metabolite_uptake_score(community, environment=env, verbose=verbose,
-                                              min_mol_weight=min_mol_weight)
-                if verbose:
-                    print('Running MPS for community {} on medium {}...'.format(comm_id, medium_id))
-
-                mps = metabolite_production_score(community, environment=env)
-
-                pairs = [(org1, org2) for org1 in organisms for org2 in organisms if org1 != org2]
-
-                for org1, org2 in pairs:
-                    if scs[org1] is None:
-                        continue
-                    if mus[org1] is None:
-                        continue
-                    if mps[org2] is None:
-                        continue
-
-                    metabolites = (set(mus[org1]) | set(mus[org2])) - exclude_bigg
-
-                    for met in sorted(metabolites):
-                        scs_o1_o2 = scs[org1][org2]
-                        mus_o1_met = mus[org1].get(met, 0)
-                        mps_o2_met = mps[org2].get(met, 0)
-                        smt = scs_o1_o2 * mus_o1_met * mps_o2_met
-                        smt_data.append((comm_id, medium_id, org1, org2, met, scs_o1_o2, mus_o1_met, mps_o2_met, smt))
-
-    # export results
-
-    prefix = output + '_' if output else ''
-
-    if mode == "global":
-
-        global_df = pd.DataFrame(global_data, columns=['community', 'medium', 'size', "mip", "mro"])
-        global_df.to_csv(prefix + 'global.tsv', sep='\t', index=False)
-
-        if debug:
-            debug_df = pd.DataFrame(debug_data, columns=['community', 'medium', 'key1', "key2", "data"])
-            debug_df.to_csv(prefix + 'debug.tsv', sep='\t', index=False)
-
-    if mode == "detailed":
-
-        columns = ['community', 'medium', 'receiver', 'donor', 'compound', 'scs', 'mus', 'mps', 'smetana']
-        smt_df = pd.DataFrame(smt_data, columns=columns)
-
-        if not zeros:
-            smt_df = smt_df.query('smetana > 0')
-
-        smt_df.to_csv(prefix + 'detailed.tsv', sep='\t', index=False)
+    export_results(mode, output, data, debug_data, zeros)
 
     if verbose:
         print('Done.')
@@ -263,8 +297,13 @@ if __name__ == '__main__':
     parser.add_argument('--mediadb', help="Media database file")
 
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('-g', '--global', dest='mip_mro', action='store_true', help="Run global analysis with MIP/MRO (faster)")
-    mode.add_argument('-d', '--detailed',  dest='smetana', action='store_true', help="Run detailed SMETANA analysis (slower)")
+    mode.add_argument('-g', '--global', dest='global', action='store_true', help="Run global analysis with MIP/MRO (faster).")
+    mode.add_argument('-d', '--detailed',  dest='smetana', action='store_true', help="Run detailed SMETANA analysis (slower).")
+    mode.add_argument('-a', '--abiotic',  dest='abiotic', help="Test abiotic perturbations with given list of compounds.")
+    mode.add_argument('-b', '--biotic',  dest='biotic', help="Test biotic perturbations with given list of species.")
+
+    parser.add_argument('-p', type=int, default=1, help="Number of components to perturb.")
+    parser.add_argument('-n', type=int, default=1, help="Number of perturbation experiments.")
 
     parser.add_argument('-v', '--verbose', action='store_true', dest='verbose', help="Switch to verbose mode")
     parser.add_argument('-z', '--zeros', action='store_true', dest='zeros', help="Include entries with zero score.")
@@ -279,6 +318,10 @@ if __name__ == '__main__':
 
     if args.smetana:
         mode = "detailed"
+    elif args.abiotic:
+        mode = "abiotic"
+    elif args.abiotic:
+        mode = "biotic"
     else:
         mode = "global"
 
@@ -302,6 +345,8 @@ if __name__ == '__main__':
         use_lp=args.lp,
         exclude=args.exclude,
         debug=args.debug,
+        p=args.p,
+        n=args.n,
     )
 
 
