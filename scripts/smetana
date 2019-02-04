@@ -13,6 +13,7 @@ from framed.experimental.medium import load_media_db
 from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score, minimal_environment
 from random import sample
 
+
 def extract_id_from_filepath(filepath):
     filename = os.path.basename(filepath)
 
@@ -69,12 +70,12 @@ def load_communities(models, communities, other, flavor, verbose):
         pre_filter |= other_models
 
         if verbose:
-            print("Loading models {}...".format(len(pre_filter)))
+            print("Loading {} models...".format(len(pre_filter)))
 
         model_dict = load_models(models, flavor, pre_filter)
     else:
         if verbose:
-            print("Loading models {}...".format(len(models)))
+            print("Loading {} models...".format(len(models)))
 
         model_dict = load_models(models, flavor)
         comm_dict = {'all': list(model_dict.keys())}
@@ -108,7 +109,7 @@ def load_media(media, mediadb, exclude, other):
         excluded_mets = set()
 
     if other:
-        df = pd.read_csv(exclude, header=None)
+        df = pd.read_csv(other, header=None)
         other_mets = set(df[0])
     else:
         other_mets = set()
@@ -218,19 +219,26 @@ def run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, v
 
 
 def run_abiotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p):
-    data = run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight)
 
-    compounds = set(env.get_compounds())
-    other_mets -= compounds
+    data = run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, False, min_mol_weight)
 
-    if len(other_mets) < p:
+    medium = set(env.get_compounds(format_str="'{}'[7:-7]"))
+
+    constant = list(medium & excluded_mets)
+    mutable = medium - excluded_mets
+    inserted = other_mets - (medium | excluded_mets)
+
+    if len(inserted) < p:
         raise RuntimeError("Insufficient compounds ({}) to perform ({}) perturbations.".format(len(other_mets), p))
 
+    if verbose:
+        print('Running {} abiotic perturbations with {} compounds...'.format(n, p))
+
     for i in range(n):
-        new_compounds = sample(other_mets, p) + sample(compounds, len(compounds) - p)
+        new_compounds = constant + sample(mutable, len(mutable) - p) + sample(inserted, p)
         new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'")
         new_id = "{}_p_{}".format(medium_id, i+1)
-        entries = run_detailed(comm_id, community, organisms, new_id, excluded_mets, new_env, verbose, min_mol_weight)
+        entries = run_detailed(comm_id, community, organisms, new_id, excluded_mets, new_env, False, min_mol_weight)
         data.extend(entries)
 
     return data
@@ -253,7 +261,7 @@ def export_results(mode, output, data, debug_data, zeros):
             df = pd.DataFrame(debug_data, columns=['community', 'medium', 'key1', "key2", "data"])
             df.to_csv(prefix + 'debug.tsv', sep='\t', index=False)
 
-    if mode == "detailed":
+    else:
 
         columns = ['community', 'medium', 'receiver', 'donor', 'compound', 'scs', 'mus', 'mps', 'smetana']
         df = pd.DataFrame(data, columns=columns)
@@ -268,9 +276,11 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
          ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
          other=None, n=1, p=1):
 
-    model_dict, comm_dict, other_models = load_communities(models, communities, other, flavor, verbose)
+    other_models = other if mode == "biotic" else None
+    model_dict, comm_dict, other_models = load_communities(models, communities, other_models, flavor, verbose)
 
-    media, media_db, excluded_mets, other_mets = load_media(media, mediadb, exclude, other)
+    other_mets = other if mode == "abiotic" else None
+    media, media_db, excluded_mets, other_mets = load_media(media, mediadb, exclude, other_mets)
 
     data = []
     debug_data = []
@@ -380,6 +390,8 @@ if __name__ == '__main__':
         mode = "global"
         other = None
 
+    if args.debug and mode != "global":
+        parser.error('For the moment --debug is only available in global mode.')
 
     if args.solver:
         set_default_solver(args.solver)
