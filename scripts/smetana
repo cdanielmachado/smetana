@@ -93,11 +93,10 @@ def load_media(media, mediadb, exclude, other):
     media_db = None
 
     if media:
-        if media != "minimal":
-            if mediadb is None:
-                raise IOError('Please provide media library with --mediadb option.')
-            else:
-                media_db = load_media_db(mediadb)
+        if mediadb is None:
+            raise IOError('Please provide media library with --mediadb option.')
+        else:
+            media_db = load_media_db(mediadb)
         media = media.split(',')
     else:
         media = [None]
@@ -117,19 +116,17 @@ def load_media(media, mediadb, exclude, other):
     return media, media_db, excluded_mets, other_mets
 
 
-def define_environment(medium, media_db, community, verbose, min_mol_weight, use_lp):
+def define_environment(medium, media_db, community, mode, verbose, min_mol_weight, use_lp):
 
-    if medium == "minimal" and (media_db is None or medium not in media_db):
-        env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp)
-        if not env:
-            return
-        medium_id = "minimal"
-    elif medium:
+    if medium:
         env = Environment.from_compounds(media_db[medium], exchange_format="'R_EX_M_{}_e_pool'")
         medium_id = medium
-    else:
+    elif mode == "global":
         env = Environment.complete(community.merged)
         medium_id = 'complete'
+    else:
+        env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp)
+        medium_id = "minimal"
 
     return medium_id, env
 
@@ -175,7 +172,7 @@ def run_global(comm_id, community, organisms, medium_id, excluded_mets, env, ver
     return global_data, debug_data
 
 
-def run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight):
+def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight):
 
     smt_data = []
 
@@ -196,7 +193,8 @@ def run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, v
 
     mps = metabolite_production_score(community, environment=env)
 
-    pairs = [(org1, org2) for org1 in organisms for org2 in organisms if org1 != org2]
+    pairs = [(org1, org2) for org1 in community.organisms
+             for org2 in community.organisms if org1 != org2]
 
     for org1, org2 in pairs:
         if scs[org1] is None:
@@ -206,7 +204,7 @@ def run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, v
         if mps[org2] is None:
             continue
 
-        metabolites = (set(mus[org1]) | set(mus[org2])) - exclude_bigg
+        metabolites = (set(mus[org1]) | set(mps[org2])) - exclude_bigg
 
         for met in sorted(metabolites):
             scs_o1_o2 = scs[org1][org2]
@@ -218,35 +216,54 @@ def run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, v
     return smt_data
 
 
-def run_abiotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p):
+def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p):
 
-    data = run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, False, min_mol_weight)
+    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight)
 
     medium = set(env.get_compounds(format_str="'{}'[7:-7]"))
 
-    constant = list(medium & excluded_mets)
-    mutable = medium - excluded_mets
+#    constant = list(medium & excluded_mets)
+#    mutable = medium - excluded_mets
     inserted = other_mets - (medium | excluded_mets)
 
     if len(inserted) < p:
-        raise RuntimeError("Insufficient compounds ({}) to perform ({}) perturbations.".format(len(other_mets), p))
+        raise RuntimeError("Insufficient compounds ({}) to perform ({}) perturbations.".format(len(inserted), p))
 
     if verbose:
         print('Running {} abiotic perturbations with {} compounds...'.format(n, p))
 
     for i in range(n):
-        new_compounds = constant + sample(mutable, len(mutable) - p) + sample(inserted, p)
+#        new_compounds = constant + sample(mutable, len(mutable) - p) + sample(inserted, p)
+        new_compounds = list(medium) + sample(inserted, p)
         new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'")
-        new_id = "{}_p_{}".format(medium_id, i+1)
-        entries = run_detailed(comm_id, community, organisms, new_id, excluded_mets, new_env, False, min_mol_weight)
+        new_id = "{}_{}".format(medium_id, i+1)
+        entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight)
         data.extend(entries)
 
     return data
 
 
-def run_biotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose, min_mol_weight, other_models, n, p):
-    return 0
+def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_models, model_dict, n, p):
 
+    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight)
+
+    inserted = other_models & set(model_dict) - set(community.organisms)
+
+    if len(inserted) < p:
+        raise RuntimeError("Insufficient species ({}) to perform ({}) perturbations.".format(len(inserted), p))
+
+    if verbose:
+        print('Running {} biotic perturbations with {} species...'.format(n, p))
+
+    for i in range(n):
+        new_species = list(community.organisms) + sample(inserted, p)
+        comm_models = [model_dict[organism_id] for organism_id in new_species]
+        new_community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id)
+        new_id = "{}_{}".format(comm_id, i + 1)
+        entries = run_detailed(new_id, new_community, medium_id, excluded_mets, env, False, min_mol_weight)
+        data.extend(entries)
+
+    return data
 
 def export_results(mode, output, data, debug_data, zeros):
 
@@ -292,23 +309,22 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
         for medium in media:
 
-            medium_id, env = define_environment(medium, media_db, community, verbose, min_mol_weight, use_lp)
+            medium_id, env = define_environment(medium, media_db, community, mode, verbose, min_mol_weight, use_lp)
 
             if mode == "global":
                 entries, debug_entries = run_global(comm_id, community, organisms, medium_id, excluded_mets, env,
                                                      verbose, min_mol_weight, use_lp, debug)
 
             if mode == "detailed":
-                entries = run_detailed(comm_id, community, organisms, medium_id, excluded_mets, env, verbose,
-                                       min_mol_weight)
+                entries = run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight)
 
             if mode == "abiotic":
-                entries = run_abiotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose,
-                                      min_mol_weight, other_mets, n, p)
+                entries = run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
+                                      other_mets, n, p)
 
             if mode == "biotic":
-                entries = run_biotic(comm_id, community, organisms, medium_id, excluded_mets, env, verbose,
-                                     min_mol_weight, other_models, n, p)
+                entries = run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
+                                     other_models, model_dict, n, p)
 
             data.extend(entries)
 
@@ -385,7 +401,7 @@ if __name__ == '__main__':
         other = args.abiotic
     elif args.biotic:
         mode = "biotic"
-        other = args.abiotic
+        other = args.biotic
     else:
         mode = "global"
         other = None
