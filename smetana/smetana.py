@@ -13,7 +13,7 @@ from warnings import warn
 
 
 def species_coupling_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6,
-                           use_pool=False):
+                           use_pool=True):
     """
     Calculate frequency of community species dependency on each other
 
@@ -41,7 +41,7 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
 
     solver = solver_instance(community.merged)
 
-    for org_id, rxns in community.organisms_reactions.items():
+    for org_id in community.organisms:
         org_var = 'y_{}'.format(org_id)
         solver.add_variable(org_var, 0, 1, vartype=VarType.BINARY, update_problem=False)
 
@@ -64,7 +64,6 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
         other = {o for o in community.organisms if o != org_id}
         solver.add_constraint('SMETANA_Biomass', {community.organisms_biomass_reactions[org_id]: 1}, '>', min_growth)
         objective = {"y_{}".format(o): 1.0 for o in other}
-
 
         if not use_pool:
             previous_constraints = []
@@ -98,7 +97,9 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
                 scores[org_id] = None
 
         else:
-            sols = solver.solve(objective, minimize=True, get_values=list(objective.keys()), pool_size=n_solutions, pool_gap=0.1)
+
+            sols = solver.solve(objective, minimize=True, get_values=list(objective.keys()),
+                                pool_size=n_solutions, pool_gap=0.5)
             solver.remove_constraint('SMETANA_Biomass')
 
             if len(sols) == 0:
@@ -142,7 +143,8 @@ def metabolite_uptake_score(community, environment=None, min_mol_weight=False, m
 
     solver = solver_instance(community.merged)
 
-    for org_id, exchange_rxns in community.organisms_exchange_reactions.items():
+    for org_id in community.organisms:
+        exchange_rxns = community.organisms_exchange_reactions[org_id]
         biomass_reaction = community.organisms_biomass_reactions[org_id]
         community.merged.biomass_reaction = biomass_reaction
 
