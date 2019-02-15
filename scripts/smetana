@@ -12,6 +12,7 @@ from framed import load_cbmodel, Community, Environment, set_default_solver
 from framed.experimental.medium import load_media_db
 from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score, minimal_environment
 from random import sample
+from framed.io.cache import ModelCache
 
 
 def extract_id_from_filepath(filepath):
@@ -27,26 +28,22 @@ def extract_id_from_filepath(filepath):
     return organism_id
 
 
-def load_models(models, flavor, pre_filter=None):
-    model_dict = OrderedDict()
+def build_cache(models, flavor=None):
+    ids = [extract_id_from_filepath(model) for model in models]
 
-    for filepath in models:
-        organism_id = extract_id_from_filepath(filepath)
+    if not flavor:
+        flavor = 'fbc2'
 
-        if pre_filter is not None and organism_id not in pre_filter:
-            continue  # do not load models that will not be used
+    load_args = {'flavor': flavor}
 
-        model = load_cbmodel(filepath, flavor=flavor)
-        model_dict[organism_id] = model
-        model.id = organism_id
-
+    def post_process(model):
         if 'R_ATPM' in model.reactions:
             model.reactions.R_ATPM.lb = 0
 
-    return model_dict
+    return ModelCache(ids, models, load_args=load_args, post_processing=post_process)
 
 
-def load_communities(models, communities, other, flavor, verbose):
+def load_communities(models, communities, other, flavor):
 
     if len(models) == 1 and '*' in models[0]:
         pattern = models[0]
@@ -54,38 +51,26 @@ def load_communities(models, communities, other, flavor, verbose):
         if len(models) == 0:
             raise RuntimeError("No files found: {}".format(pattern))
 
-    if not flavor:
-        flavor = 'fbc2'
-
     if other is not None:
         df = pd.read_csv(other, header=None)
         other_models = set(df[0])
     else:
         other_models = set()
 
+    model_cache = build_cache(models, flavor)
+
     if communities is not None:
         df = pd.read_csv(communities, sep='\t', header=None)
         comm_dict = OrderedDict((name, group[1].tolist()) for name, group in df.groupby(0))
-        pre_filter = {org_id for organisms in list(comm_dict.values()) for org_id in organisms}
-        pre_filter |= other_models
-
-        if verbose:
-            print("Loading {} models...".format(len(pre_filter)))
-
-        model_dict = load_models(models, flavor, pre_filter)
     else:
-        if verbose:
-            print("Loading {} models...".format(len(models)))
-
-        model_dict = load_models(models, flavor)
-        comm_dict = {'all': list(model_dict.keys())}
+        comm_dict = {'all': model_cache.get_ids()}
 
     if other:
-        missing = other_models - set(model_dict.keys())
+        missing = other_models - set(model_cache.get_ids())
         if missing:
             print("Warning: {} models in perturbation file missing.".format(len(missing)))
 
-    return model_dict, comm_dict, other_models
+    return model_cache, comm_dict, other_models
 
 
 def load_media(media, mediadb, exclude, other):
@@ -221,9 +206,6 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
     data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight)
 
     medium = set(env.get_compounds(format_str="'{}'[7:-7]"))
-
-#    constant = list(medium & excluded_mets)
-#    mutable = medium - excluded_mets
     inserted = other_mets - (medium | excluded_mets)
 
     if len(inserted) < p:
@@ -233,7 +215,6 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
         print('Running {} abiotic perturbations with {} compounds...'.format(n, p))
 
     for i in range(n):
-#        new_compounds = constant + sample(mutable, len(mutable) - p) + sample(inserted, p)
         new_compounds = list(medium) + sample(inserted, p)
         new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'")
         new_id = "{}_{}".format(medium_id, i+1)
@@ -243,11 +224,11 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
     return data
 
 
-def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_models, model_dict, n, p):
+def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_models, model_cache, n, p):
 
     data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight)
 
-    inserted = other_models & set(model_dict) - set(community.organisms)
+    inserted = other_models - set(community.organisms)
 
     if len(inserted) < p:
         raise RuntimeError("Insufficient species ({}) to perform ({}) perturbations.".format(len(inserted), p))
@@ -257,13 +238,14 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
 
     for i in range(n):
         new_species = list(community.organisms) + sample(inserted, p)
-        comm_models = [model_dict[organism_id] for organism_id in new_species]
+        comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in new_species]
         new_community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id)
         new_id = "{}_{}".format(comm_id, i + 1)
-        entries = run_detailed(new_id, new_community, medium_id, excluded_mets, env, False, min_mol_weight)
+        entries = run_detailed(new_id, new_community, medium_id, excluded_mets, env, True, min_mol_weight)
         data.extend(entries)
 
     return data
+
 
 def export_results(mode, output, data, debug_data, zeros):
 
@@ -294,7 +276,7 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
          other=None, n=1, p=1):
 
     other_models = other if mode == "biotic" else None
-    model_dict, comm_dict, other_models = load_communities(models, communities, other_models, flavor, verbose)
+    model_cache, comm_dict, other_models = load_communities(models, communities, other_models, flavor)
 
     other_mets = other if mode == "abiotic" else None
     media, media_db, excluded_mets, other_mets = load_media(media, mediadb, exclude, other_mets)
@@ -304,7 +286,10 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
     for comm_id, organisms in list(comm_dict.items()):
 
-        comm_models = [model_dict[organism_id] for organism_id in organisms]
+        if verbose:
+            print("Loading community: " + comm_id)
+
+        comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in organisms]
         community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id)
 
         for medium in media:
@@ -324,7 +309,7 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
             if mode == "biotic":
                 entries = run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
-                                     other_models, model_dict, n, p)
+                                     other_models, model_cache, n, p)
 
             data.extend(entries)
 
