@@ -1,7 +1,6 @@
 from __future__ import division
 from builtins import map
 from builtins import range
-from framed.community.model import Community
 from framed.experimental.medium import minimal_medium
 from framed.solvers import solver_instance
 from framed.solvers.solver import VarType, Status
@@ -338,7 +337,7 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
 
     medium = {x[7:-7] for x in medium} - exclude
     individual_media = {}
-    min_growth_indiv = min_growth / len(community.organisms)
+#    min_growth_indiv = min_growth / len(community.organisms)
     solver = solver_instance(community.merged)
 
     for org_id in community.organisms:
@@ -347,7 +346,7 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
         org_interacting_exch = community.organisms_exchange_reactions[org_id]
 
         medium_i, sol = minimal_medium(community.merged, exchange_reactions=org_interacting_exch, direction=direction,
-                                     min_mass_weight=min_mol_weight, min_growth=min_growth_indiv, max_uptake=max_uptake,
+                                     min_mass_weight=min_mol_weight, min_growth=min_growth, max_uptake=max_uptake,
                                      validate=validate, solver=solver, warnings=False, milp=(not use_lp))
 
         if sol.status != Status.OPTIMAL:

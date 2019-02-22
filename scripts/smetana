@@ -103,14 +103,16 @@ def load_media(media, mediadb, exclude, other):
 
 def define_environment(medium, media_db, community, mode, verbose, min_mol_weight, use_lp):
 
+    max_uptake = 10.0 * len(community.organisms)
+
     if medium:
-        env = Environment.from_compounds(media_db[medium], exchange_format="'R_EX_M_{}_e_pool'")
+        env = Environment.from_compounds(media_db[medium], exchange_format="'R_EX_M_{}_e_pool'", max_uptake=max_uptake)
         medium_id = medium
     elif mode == "global":
-        env = Environment.complete(community.merged)
+        env = Environment.complete(community.merged, max_uptake=max_uptake)
         medium_id = 'complete'
     else:
-        env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp)
+        env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp, max_uptake=max_uptake)
         medium_id = "minimal"
 
     return medium_id, env
@@ -173,6 +175,7 @@ def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min
 
     mus = metabolite_uptake_score(community, environment=env, verbose=verbose,
                                   min_mol_weight=min_mol_weight)
+
     if verbose:
         print('Running MPS for community {} on medium {}...'.format(comm_id, medium_id))
 
@@ -239,7 +242,8 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
     for i in range(n):
         new_species = list(community.organisms) + sample(inserted, p)
         comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in new_species]
-        new_community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id)
+        new_community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id,
+                                  create_biomass=False)
         new_id = "{}_{}".format(comm_id, i + 1)
         entries = run_detailed(new_id, new_community, medium_id, excluded_mets, env, True, min_mol_weight)
         data.extend(entries)
