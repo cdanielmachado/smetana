@@ -8,7 +8,7 @@ import os
 import glob
 import pandas as pd
 from collections import OrderedDict
-from framed import load_cbmodel, Community, Environment, set_default_solver
+from framed import Community, Environment, set_default_solver
 from framed.experimental.medium import load_media_db
 from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score, minimal_environment
 from random import sample
@@ -159,16 +159,17 @@ def run_global(comm_id, community, organisms, medium_id, excluded_mets, env, ver
     return global_data, debug_data
 
 
-def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight):
+def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, ignore_coupling):
 
     smt_data = []
 
     exclude_bigg = {'M_{}_e'.format(x) for x in excluded_mets}
 
-    if verbose:
-        print('Running SCS for community {} on medium {}...'.format(comm_id, medium_id))
+    if not ignore_coupling:
+        if verbose:
+            print('Running SCS for community {} on medium {}...'.format(comm_id, medium_id))
 
-    scs = species_coupling_score(community, environment=env, verbose=verbose)
+        scs = species_coupling_score(community, environment=env, verbose=verbose)
 
     if verbose:
         print('Running MUS for community {} on medium {}...'.format(comm_id, medium_id))
@@ -185,7 +186,7 @@ def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min
              for org2 in community.organisms if org1 != org2]
 
     for org1, org2 in pairs:
-        if scs[org1] is None:
+        if not ignore_coupling and scs[org1] is None:
             continue
         if mus[org1] is None:
             continue
@@ -195,18 +196,23 @@ def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min
         metabolites = (set(mus[org1]) | set(mps[org2])) - exclude_bigg
 
         for met in sorted(metabolites):
-            scs_o1_o2 = scs[org1][org2]
             mus_o1_met = mus[org1].get(met, 0)
             mps_o2_met = mps[org2].get(met, 0)
-            smt = scs_o1_o2 * mus_o1_met * mps_o2_met
+
+            if ignore_coupling:
+                scs_o1_o2 = 'n/a'
+                smt = mus_o1_met * mps_o2_met
+            else:
+                scs_o1_o2 = scs[org1][org2]
+                smt = scs_o1_o2 * mus_o1_met * mps_o2_met
             smt_data.append((comm_id, medium_id, org1, org2, met, scs_o1_o2, mus_o1_met, mps_o2_met, smt))
 
     return smt_data
 
 
-def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p):
+def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p, ignore_coupling):
 
-    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight)
+    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
 
     medium = set(env.get_compounds(format_str="'{}'[7:-7]"))
     inserted = other_mets - (medium | excluded_mets)
@@ -221,15 +227,16 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
         new_compounds = list(medium) + sample(inserted, p)
         new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'")
         new_id = "{}_{}".format(medium_id, i+1)
-        entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight)
+        entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight, ignore_coupling)
         data.extend(entries)
 
     return data
 
 
-def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_models, model_cache, n, p):
+def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_models, model_cache,
+               n, p, ignore_coupling):
 
-    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight)
+    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
 
     inserted = other_models - set(community.organisms)
 
@@ -245,7 +252,7 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
         new_community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id,
                                   create_biomass=False)
         new_id = "{}_{}".format(comm_id, i + 1)
-        entries = run_detailed(new_id, new_community, medium_id, excluded_mets, env, True, min_mol_weight)
+        entries = run_detailed(new_id, new_community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
         data.extend(entries)
 
     return data
@@ -277,7 +284,7 @@ def export_results(mode, output, data, debug_data, zeros):
 
 def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
          ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
-         other=None, n=1, p=1):
+         other=None, n=1, p=1, ignore_coupling=False):
 
     other_models = other if mode == "biotic" else None
     model_cache, comm_dict, other_models = load_communities(models, communities, other_models, flavor)
@@ -305,15 +312,16 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
                                                      verbose, min_mol_weight, use_lp, debug)
 
             if mode == "detailed":
-                entries = run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight)
+                entries = run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
+                                       ignore_coupling)
 
             if mode == "abiotic":
                 entries = run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
-                                      other_mets, n, p)
+                                      other_mets, n, p, ignore_coupling)
 
             if mode == "biotic":
                 entries = run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
-                                     other_models, model_cache, n, p)
+                                     other_models, model_cache, n, p, ignore_coupling)
 
             data.extend(entries)
 
@@ -379,6 +387,7 @@ if __name__ == '__main__':
     parser.add_argument('--lp', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--exclude', help="List of compounds to exclude from calculations (e.g.: inorganic compounds).")
     parser.add_argument('--debug', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--no-coupling', action='store_true', help="Ignore species coupling scores.")
 
     args = parser.parse_args()
 
@@ -421,6 +430,7 @@ if __name__ == '__main__':
         other=other,
         p=args.p,
         n=args.n,
+        ignore_coupling=args.no_coupling,
     )
 
 
