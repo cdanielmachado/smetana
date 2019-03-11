@@ -251,6 +251,7 @@ def mip_score(community, environment=None, min_mol_weight=False, min_growth=0.1,
 
     noninteracting = community.copy(copy_models=False, interacting=False)
     exch_reactions = set(community.merged.get_exchange_reactions())
+    max_uptake = max_uptake * len(community.organisms)
 
     if environment:
         environment.apply(noninteracting.merged, inplace=True, warning=False)
@@ -315,6 +316,7 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
     """
 
     exch_reactions = set(community.merged.get_exchange_reactions())
+    max_uptake = max_uptake * len(community.organisms)
 
     if environment:
         environment.apply(community.merged, inplace=True, warning=False)
@@ -337,7 +339,6 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
 
     medium = {x[7:-7] for x in medium} - exclude
     individual_media = {}
-#    min_growth_indiv = min_growth / len(community.organisms)
     solver = solver_instance(community.merged)
 
     for org_id in community.organisms:
