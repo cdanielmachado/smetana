@@ -60,7 +60,7 @@ def load_communities(models, communities, other, flavor):
     model_cache = build_cache(models, flavor)
 
     if communities is not None:
-        df = pd.read_csv(communities, sep='\t', header=None)
+        df = pd.read_csv(communities, sep='\t', header=None, dtype=str)
         comm_dict = OrderedDict((name, group[1].tolist()) for name, group in df.groupby(0))
     else:
         comm_dict = {'all': model_cache.get_ids()}
