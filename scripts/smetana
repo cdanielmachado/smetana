@@ -223,9 +223,11 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
     if verbose:
         print('Running {} abiotic perturbations with {} compounds...'.format(n, p))
 
+    max_uptake = 10.0 * len(community.organisms)
+
     for i in range(n):
         new_compounds = list(medium) + sample(inserted, p)
-        new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'")
+        new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'", max_uptake=max_uptake)
         new_id = "{}_{}".format(medium_id, i+1)
         entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight, ignore_coupling)
         data.extend(entries)
@@ -387,7 +389,7 @@ if __name__ == '__main__':
     parser.add_argument('--lp', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--exclude', help="List of compounds to exclude from calculations (e.g.: inorganic compounds).")
     parser.add_argument('--debug', action='store_true', help=argparse.SUPPRESS)
-    parser.add_argument('--no-coupling', action='store_true', help="Ignore species coupling scores.")
+    parser.add_argument('--no-coupling', action='store_true', help="Don't compute species coupling scores.")
 
     args = parser.parse_args()
 
