@@ -234,11 +234,12 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
     for i in range(n):
         if do_all:
             new_compounds = list(medium) + inserted[i]
+            new_id = "{}_{}".format(medium_id, inserted[i])
         else:
             new_compounds = list(medium) + sample(inserted, p)
+            new_id = "{}_{}".format(medium_id, i+1)
 
         new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'", max_uptake=max_uptake)
-        new_id = "{}_{}".format(medium_id, i+1)
         entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight, ignore_coupling)
         data.extend(entries)
 
@@ -267,13 +268,14 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
     for i in range(n):
         if do_all:
             new_species = list(community.organisms) + inserted[i]
+            new_id = "{}_{}".format(comm_id, inserted[i])
         else:
             new_species = list(community.organisms) + sample(inserted, p)
-            
+            new_id = "{}_{}".format(comm_id, i + 1)
+
         comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in new_species]
         new_community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id,
                                   create_biomass=False)
-        new_id = "{}_{}".format(comm_id, i + 1)
         entries = run_detailed(new_id, new_community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
         data.extend(entries)
 
