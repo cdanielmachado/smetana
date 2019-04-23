@@ -225,8 +225,18 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
 
     max_uptake = 10.0 * len(community.organisms)
 
+    if n == 0:
+        do_all = True
+        n = len(inserted)
+    else:
+        do_all = False
+
     for i in range(n):
-        new_compounds = list(medium) + sample(inserted, p)
+        if do_all:
+            new_compounds = list(medium) + inserted[i]
+        else:
+            new_compounds = list(medium) + sample(inserted, p)
+
         new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'", max_uptake=max_uptake)
         new_id = "{}_{}".format(medium_id, i+1)
         entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight, ignore_coupling)
@@ -248,8 +258,18 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
     if verbose:
         print('Running {} biotic perturbations with {} species...'.format(n, p))
 
+    if n == 0:
+        do_all = True
+        n = len(inserted)
+    else:
+        do_all = False
+
     for i in range(n):
-        new_species = list(community.organisms) + sample(inserted, p)
+        if do_all:
+            new_species = list(community.organisms) + inserted[i]
+        else:
+            new_species = list(community.organisms) + sample(inserted, p)
+            
         comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in new_species]
         new_community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id,
                                   create_biomass=False)
@@ -378,8 +398,13 @@ if __name__ == '__main__':
     mode.add_argument('-a', '--abiotic',  dest='abiotic', help="Test abiotic perturbations with given list of compounds.")
     mode.add_argument('-b', '--biotic',  dest='biotic', help="Test biotic perturbations with given list of species.")
 
-    parser.add_argument('-p', type=int, default=1, help="Number of components to perturb.")
-    parser.add_argument('-n', type=int, default=1, help="Number of perturbation experiments.")
+    parser.add_argument('-p', type=int, default=1, help="Number of components to perturb simultaneously (default: 1).")
+    parser.add_argument('-n', type=int, default=1, help=textwrap.dedent(
+        """
+        Number of random perturbation experiments per community (default: 1).
+        Selecting n = 0 will test all single species/compound perturbations exactly once.
+        """
+    ))
 
     parser.add_argument('-v', '--verbose', action='store_true', dest='verbose', help="Switch to verbose mode")
     parser.add_argument('-z', '--zeros', action='store_true', dest='zeros', help="Include entries with zero score.")
