@@ -212,8 +212,6 @@ def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min
 
 def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p, ignore_coupling):
 
-    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
-
     medium = set(env.get_compounds(format_str="'{}'[7:-7]"))
     inserted = sorted(other_mets - (medium | excluded_mets))
 
@@ -231,9 +229,11 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
     else:
         do_all = False
 
+    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
+
     for i in range(n):
         if do_all:
-            new_compounds = list(medium) + inserted[i]
+            new_compounds = list(medium) + [inserted[i]]
             new_id = "{}_{}".format(medium_id, inserted[i])
         else:
             new_compounds = list(medium) + sample(inserted, p)
@@ -249,8 +249,6 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
 def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_models, model_cache,
                n, p, ignore_coupling):
 
-    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
-
     inserted = sorted(other_models - set(community.organisms))
 
     if len(inserted) < p:
@@ -265,9 +263,11 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
     else:
         do_all = False
 
+    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
+
     for i in range(n):
         if do_all:
-            new_species = list(community.organisms) + inserted[i]
+            new_species = list(community.organisms) + [inserted[i]]
             new_id = "{}_{}".format(comm_id, inserted[i])
         else:
             new_species = list(community.organisms) + sample(inserted, p)
