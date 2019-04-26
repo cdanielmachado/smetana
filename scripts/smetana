@@ -218,16 +218,18 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
     if len(inserted) < p:
         raise RuntimeError("Insufficient compounds ({}) to perform ({}) perturbations.".format(len(inserted), p))
 
-    if verbose:
-        print('Running {} abiotic perturbations with {} compounds...'.format(n, p))
-
     max_uptake = 10.0 * len(community.organisms)
 
     if n == 0:
         do_all = True
         n = len(inserted)
+        if verbose:
+            print('Running {} systematic abiotic perturbations with 1 compound...'.format(n))
+
     else:
         do_all = False
+        if verbose:
+            print('Running {} random abiotic perturbations with {} compounds...'.format(n, p))
 
     data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
 
@@ -254,14 +256,18 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
     if len(inserted) < p:
         raise RuntimeError("Insufficient species ({}) to perform ({}) perturbations.".format(len(inserted), p))
 
-    if verbose:
-        print('Running {} biotic perturbations with {} species...'.format(n, p))
+
 
     if n == 0:
         do_all = True
         n = len(inserted)
+        if verbose:
+            print('Running {} systematic biotic perturbations with 1 species...'.format(n))
+
     else:
         do_all = False
+        if verbose:
+            print('Running {} random biotic perturbations with {} species...'.format(n, p))
 
     data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
 
