@@ -29,4 +29,4 @@ Additionally, you must install one of the supported solvers:
 .. _CPLEX: https://www.ibm.com/analytics/data-science/prescriptive-analytics/cplex-optimizer
 .. _Gurobi: https://www.gurobi.com/
 
-From our experience you get faster results using CPLEX.
+Please note that although both solvers are supported, SMETANA has been mainly optimized for CPLEX.

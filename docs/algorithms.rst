@@ -14,7 +14,6 @@ SMETANA includes two algorithms that analyse global properties of a community:
 
 - MRO (metabolic resource overlap): calculates how much the species compete for the same metabolites.
 - MIP (metabolic interaction potential): calculates how many metabolites the species can share to decrease their dependency on external resources.
-- SMETANA: the global SMETANA score is a measure of the community interactions and is the sum of the individual SMETANA scores.
 
 
 

@@ -15,9 +15,6 @@ To run SMETANA on a singe community just give it a list of single-species models
 
     $ smetana *.xml
 
-This will generate two files called ``global.tsv`` and ``detailed.tsv`` with global and detailed properties on the
-given microbial community (see Algorithms section for details).
-
 
 Multiple communities
 ____________________
@@ -58,6 +55,15 @@ For an example on how to create your own library file please check this example_
 .. _example: https://github.com/cdanielmachado/carveme/blob/master/carveme/data/input/media_db.tsv
 
 
+Global vs Detailed mode
+_______________________
+
+SMETANA has two main running modes:
+
+- Global (``-g``, ``--global``): runs MIP/MRO and is much faster, recommended when analysing multiple communities.
+- Detailed (``-d``, ``--detailed``): calculates all inter-species interactions (much slower), check **Algorithms** for details.
+
+
 Advanced
 ________
 
@@ -68,8 +74,12 @@ SMETANA offers other options, such as:
 - Selecting only a subset of scores to run (``-s``, ``--scores``)
 - Changing your default solver (``--solver``)
 - Specifying the identifier of the extracellular compartment in the models (``--ext``).
+- Calculate minimal media using molecular weights (``--molweight``).
+- Exclude certain compounds (e.g.: inorganic compounds) from the analysis (``--exclude``).
+- Do not compute species coupling scores (allow non-growth coupled interactions) (``--no-coupling``).
 
-For more detailed instructions just type:
+
+For more detailed instructions please type:
 
 .. code-block:: console
 
