@@ -10,3 +10,7 @@ dist/*
 docs/_build/*
 
 *.pyc
+
+venv/*
+
+.eggs/*
