@@ -335,7 +335,7 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
     interacting_env.apply(community.merged, inplace=True)
 
     if exclude is None:
-        exclude = {}
+        exclude = set()
 
     medium = {x[7:-7] for x in medium} - exclude
     individual_media = {}
