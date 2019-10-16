@@ -8,10 +8,9 @@ from setuptools import setup, find_packages
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-requirements = [
-    "reframed>=1.0",
-    "pandas>=0.20"
-]
+requirements = [ "reframed", "pandas"] 
+
+test_requirements = requirements + ['cplex']
 
 script_list = [
     "scripts/smetana",
@@ -37,6 +36,8 @@ setup(
     include_package_data=True,
     keywords='smetana',
     name='smetana',
+    test_suite='tests',
+    tests_require=test_requirements,
     packages=find_packages(include=['smetana']),
     setup_requires=['setuptools_scm'],
     url='https://github.com/cdanielmachado/smetana',

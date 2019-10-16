@@ -5,10 +5,11 @@ from reframed.solvers.solution import Status
 from collections import Counter
 from itertools import combinations, chain
 from warnings import warn
+from math import isinf
 
 
-def species_coupling_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6,
-                           use_pool=True):
+def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6,
+             use_pool=True):
     """
     Calculate frequency of community species dependency on each other
 
@@ -109,8 +110,8 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
     return scores
 
 
-def metabolite_uptake_score(community, environment=None, min_mol_weight=False, min_growth=0.1, max_uptake=10.0,
-                            abstol=1e-6, validate=False, n_solutions=100, pool_gap=0.5, verbose=True):
+def mu_score(community, environment=None, min_mol_weight=False, min_growth=0.1, max_uptake=10.0,
+             abstol=1e-6, validate=False, n_solutions=100, pool_gap=0.5, verbose=True):
     """
     Calculate frequency of metabolite requirement for species growth
 
@@ -162,7 +163,7 @@ def metabolite_uptake_score(community, environment=None, min_mol_weight=False, m
     return scores
 
 
-def metabolite_production_score(community, environment=None, abstol=1e-3):
+def mp_score(community, environment=None, abstol=1e-3):
     """
     Discover metabolites which species can produce in community
 
@@ -189,7 +190,7 @@ def metabolite_production_score(community, environment=None, abstol=1e-3):
     for exchange_rxns in community.organisms_exchange_reactions.values():
         for r_id in exchange_rxns.keys():
             rxn = community.merged.reactions[r_id]
-            if rxn.ub is None:
+            if isinf(rxn.ub):
                 rxn.ub = 1000
 
     solver = solver_instance(community.merged)
