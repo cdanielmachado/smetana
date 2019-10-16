@@ -3,7 +3,8 @@ from builtins import map
 from builtins import range
 from framed.experimental.medium import minimal_medium
 from framed.solvers import solver_instance
-from framed.solvers.solver import VarType, Status
+from framed.solvers.solver import VarType
+from framed.solvers.solution import Status
 from framed import Environment
 
 from collections import Counter
