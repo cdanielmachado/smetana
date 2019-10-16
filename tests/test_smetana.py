@@ -20,4 +20,5 @@ class TestDetailed(unittest.TestCase):
         main(["tests/data/ec_*.xml"], mode="detailed", output="tests/output/test", media="M9,LB",
              mediadb="tests/data/media_db.tsv", ext_comp_id="e", exclude="tests/data/inorganic.txt")
         df = pd.read_csv("tests/output/test_detailed.tsv")
-        self.assertEqual(df.shape[0], 11)
+        self.assertGreater(df.shape[0], 5)
+        self.assertLess(df.shape[0], 15)
