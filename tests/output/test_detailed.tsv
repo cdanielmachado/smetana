@@ -1,0 +1,12 @@
+community	medium	receiver	donor	compound	scs	mus	mps	smetana
+all	M9	ec_glc_ko	ec_nh4_ko	M_ac_e	1.0	0.11	1	0.11
+all	M9	ec_glc_ko	ec_nh4_ko	M_acald_e	1.0	0.28	1	0.28
+all	M9	ec_glc_ko	ec_nh4_ko	M_akg_e	1.0	0.25	1	0.25
+all	M9	ec_glc_ko	ec_nh4_ko	M_co2_e	1.0	0.02	1	0.02
+all	M9	ec_glc_ko	ec_nh4_ko	M_etoh_e	1.0	0.31	1	0.31
+all	M9	ec_glc_ko	ec_nh4_ko	M_lac__D_e	1.0	0.37	1	0.37
+all	M9	ec_glc_ko	ec_nh4_ko	M_pyr_e	1.0	0.24	1	0.24
+all	M9	ec_glc_ko	ec_nh4_ko	M_succ_e	1.0	0.09	1	0.09
+all	M9	ec_nh4_ko	ec_glc_ko	M_glu__L_e	1.0	1.0	1	1.0
+all	M9	ec_nh4_ko	ec_glc_ko	M_lac__D_e	1.0	0.08333333333333333	1	0.08333333333333333
+all	M9	ec_nh4_ko	ec_glc_ko	M_pyr_e	1.0	0.08333333333333333	1	0.08333333333333333
