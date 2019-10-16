@@ -59,7 +59,6 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', action='store_true', dest='verbose', help="Switch to verbose mode")
     parser.add_argument('-z', '--zeros', action='store_true', dest='zeros', help="Include entries with zero score.")
     parser.add_argument('--solver', help="Change default solver (current options: 'gurobi', 'cplex').")
-    parser.add_argument('--ext', help="Extracellular compartment identifier in the models (default 'C_e').")
     parser.add_argument('--molweight', action='store_true', help="Use molecular weight minimization (recomended).")
     parser.add_argument('--lp', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--exclude', help="List of compounds to exclude from calculations (e.g.: inorganic compounds).")
@@ -87,8 +86,6 @@ if __name__ == '__main__':
     if args.solver:
         set_default_solver(args.solver)
 
-    ext_comp_id = args.ext if args.ext else 'C_e'
-
     main(
         models=args.models,
         communities=args.communities,
@@ -98,7 +95,6 @@ if __name__ == '__main__':
         media=args.media,
         mediadb=args.mediadb,
         zeros=args.zeros,
-        ext_comp_id=ext_comp_id,
         verbose=args.verbose,
         min_mol_weight=args.molweight,
         use_lp=args.lp,

@@ -41,6 +41,6 @@ setup(
     packages=find_packages(include=['smetana']),
     setup_requires=['setuptools_scm'],
     url='https://github.com/cdanielmachado/smetana',
-    version='1.1.0',
+    version='1.2.0',
     zip_safe=False,
 )

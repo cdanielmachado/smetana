@@ -313,7 +313,7 @@ def export_results(mode, output, data, debug_data, zeros):
 
 
 def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
-         ext_comp_id=None, verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
+         verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
          other=None, n=1, p=1, ignore_coupling=False):
 
     other_models = other if mode == "biotic" else None
@@ -331,7 +331,7 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
             print("Loading community: " + comm_id)
 
         comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in organisms]
-        community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id)
+        community = Community(comm_id, comm_models, copy_models=False)
 
         for medium in media:
 

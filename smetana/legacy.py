@@ -28,12 +28,13 @@ class CommunityNameMapping(object):
         self.community_exchange_reaction = community_exchange_reaction
 
     def __repr__(self):
-        return "<orig_m: {}, org_m: {}, ex_m: {}, orig_r: {}, org_r: {}, exch_r: {}>".format(self.original_metabolite,
-                                                                                             self.organism_metabolite,
-                                                                                             self.extracellular_metabolite,
-                                                                                             self.original_reaction,
-                                                                                             self.organism_reaction,
-                                                                                             self.community_exchange_reaction)
+        repr_str =  "<orig_m: {}, org_m: {}, ex_m: {}, orig_r: {}, org_r: {}, exch_r: {}>"
+        return repr_str.format(self.original_metabolite,
+                               self.organism_metabolite,
+                               self.extracellular_metabolite,
+                               self.original_reaction,
+                               self.organism_reaction,
+                               self.community_exchange_reaction)
 
 
 class Community(object):
@@ -44,7 +45,7 @@ class Community(object):
     into a single multi-species model (CBModel) which is compatible with most types of constraint-based methods.
     """
 
-    def __init__(self, community_id, models=None, copy_models=True, extracellular_compartment_id="C_e",
+    def __init__(self, community_id, models=None, copy_models=True,
                  merge_extracellular_compartments=False, create_biomass=True, interacting=True,
                  exchanged_metabolites_blacklist=set()):
         """
@@ -66,7 +67,6 @@ class Community(object):
 
         self.id = community_id
         self._organisms = AttrOrderedDict()
-        self._extracellular_compartment = extracellular_compartment_id  # TODO: maybe merge and compartment id arguments should be merged?
         self._merge_extracellular_compartments = merge_extracellular_compartments
         self._create_biomass = create_biomass
         self._merged_model = None
@@ -268,12 +268,6 @@ class Community(object):
 
             return new_obj
 
-        models_missing_extracelullar_compartment = [m.id for m in self._organisms.values()
-                                                    if self._extracellular_compartment not in m.compartments]
-        if models_missing_extracelullar_compartment:
-            raise RuntimeError("Extracellular compartment '{}' missing from models: '{}'".format(
-                self._extracellular_compartment, "', '".join(models_missing_extracelullar_compartment)))
-
         models_missing_biomass = [m.id for m in self._organisms.values() if not m.biomass_reaction]
         if models_missing_biomass:
             raise RuntimeError("Biomass reaction not found in models: {}".format("', '".join(models_missing_biomass)))
@@ -299,14 +293,14 @@ class Community(object):
                 merged_model.add_compartment(export_pool_compartment)
 
             for c_id, comp in model.compartments.items():
-                if c_id != self._extracellular_compartment or not self._merge_extracellular_compartments:
+                if not comp.external or not self._merge_extracellular_compartments:
                     new_comp = _copy_object(comp, org_id)
                     merged_model.add_compartment(new_comp)
                 elif c_id not in merged_model.compartments:
                     merged_model.add_compartment(deepcopy(comp))
 
             for m_id, met in model.metabolites.items():
-                if met.compartment != self._extracellular_compartment or not self._merge_extracellular_compartments:
+                if not model.compartments[met.compartment].external or not self._merge_extracellular_compartments:
                     new_met = _copy_object(met, org_id, _id_pattern(met.compartment, org_id))
                     merged_model.add_metabolite(new_met)
                 elif m_id not in merged_model.metabolites:
@@ -354,7 +348,7 @@ class Community(object):
 
                     for m_id, coeff in rxn.stoichiometry.items():
                         m_blacklisted = m_id in self._exchanged_metabolites_blacklist
-                        if (model.metabolites[m_id].compartment != self._extracellular_compartment
+                        if (not model.compartments[model.metabolites[m_id].compartment].external
                                 or not self._merge_extracellular_compartments):
                             del new_rxn.stoichiometry[m_id]
                             new_id = _id_pattern(m_id, org_id)
@@ -362,7 +356,7 @@ class Community(object):
 
                         if is_exchange:
                             new_rxn.reaction_type = ReactionType.OTHER
-                            if (model.metabolites[m_id].compartment == self._extracellular_compartment
+                            if (model.compartments[model.metabolites[m_id].compartment].external
                                     and not self._merge_extracellular_compartments):
                                 # TODO: if m_id in self._exchanged_metabolites_blacklist:
                                 pool_id = _id_pattern(m_id, "pool")
@@ -404,8 +398,8 @@ class Community(object):
 
                         # Add biomass metabolite to biomass equation
                         m_id = _id_pattern('Biomass', org_id)
-                        name = _name_pattern('Framed biomass', org_id)
-                        comp = 'pool' if not self._merge_extracellular_compartments else self._extracellular_compartment
+                        name = _name_pattern('Community biomass', org_id)
+                        comp = 'pool'
                         biomass_met = Metabolite(m_id, name, comp)
                         merged_model.add_metabolite(biomass_met)
                         new_rxn.stoichiometry[m_id] = 1
@@ -435,7 +429,7 @@ class Community(object):
 
                         m_id = _id_pattern('Biomass', org_id)
                         name = _name_pattern('Biomass', org_id)
-                        comp = 'pool' if not self._merge_extracellular_compartments else self._extracellular_compartment
+                        comp = 'pool'
                         biomass_met = Metabolite(m_id, name, comp)
                         merged_model.add_metabolite(biomass_met)
                         new_rxn.stoichiometry[m_id] = 1
@@ -485,7 +479,6 @@ class Community(object):
 
         copy_community = Community(self.id, models=list(self._organisms.values()),
                                    copy_models=copy_models, create_biomass=create_biomass,
-                                   extracellular_compartment_id=self._extracellular_compartment,
                                    merge_extracellular_compartments=merge_extracellular_compartments,
                                    interacting=interacting,
                                    exchanged_metabolites_blacklist=exchanged_metabolites_blacklist)
