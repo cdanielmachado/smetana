@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-from smetana import *
 
 
 class TestMIP(unittest.TestCase):
@@ -12,7 +11,7 @@ class TestMIP(unittest.TestCase):
         pass
 
     def test_mip(self):
-        pass
+        raise NotImplementedError("Unit tests are not yet implemented.")
 
 
 class TestMRO(unittest.TestCase):
@@ -22,7 +21,7 @@ class TestMRO(unittest.TestCase):
         pass
 
     def test_mro(self):
-        pass
+        raise NotImplementedError("Unit tests are not yet implemented.")
 
 
 class TestDetailed(unittest.TestCase):
@@ -32,4 +31,4 @@ class TestDetailed(unittest.TestCase):
         pass
 
     def test_global(self):
-        pass
+        raise NotImplementedError("Unit tests are not yet implemented.")
