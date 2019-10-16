@@ -1,11 +1,6 @@
-from __future__ import division
-from builtins import map
-from builtins import range
-from framed.experimental.medium import minimal_medium
-from framed.solvers import solver_instance
-from framed.solvers.solver import VarType
-from framed.solvers.solution import Status
-from framed import Environment
+from reframed import minimal_medium, solver_instance, Environment
+from reframed.solvers.solver import VarType
+from reframed.solvers.solution import Status
 
 from collections import Counter
 from itertools import combinations, chain
@@ -43,7 +38,7 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
 
     for org_id in community.organisms:
         org_var = 'y_{}'.format(org_id)
-        solver.add_variable(org_var, 0, 1, vartype=VarType.BINARY, update_problem=False)
+        solver.add_variable(org_var, 0, 1, vartype=VarType.BINARY, update=False)
 
     solver.update()
 
@@ -53,8 +48,8 @@ def species_coupling_score(community, environment=None, min_growth=0.1, n_soluti
         for r_id in rxns:
             if r_id == community.organisms_biomass_reactions[org_id]:
                 continue
-            solver.add_constraint('c_{}_lb'.format(r_id), {r_id: 1, org_var: bigM}, '>', 0, update_problem=False)
-            solver.add_constraint('c_{}_ub'.format(r_id), {r_id: 1, org_var: -bigM}, '<', 0, update_problem=False)
+            solver.add_constraint('c_{}_lb'.format(r_id), {r_id: 1, org_var: bigM}, '>', 0, update=False)
+            solver.add_constraint('c_{}_ub'.format(r_id), {r_id: 1, org_var: -bigM}, '<', 0, update=False)
 
     solver.update()
 
@@ -187,7 +182,7 @@ def metabolite_production_score(community, environment=None, abstol=1e-3):
 
     if environment:
         environment.apply(community.merged, inplace=True, warning=False)
-        env_compounds = environment.get_compounds(format_str="\'{}\'[5:-5]")
+        env_compounds = environment.get_compounds(fmt_func=lambda x: x[5:-5])
     else:
         env_compounds = set()
 
@@ -329,7 +324,7 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
 
     if sol.status != Status.OPTIMAL:
         if verbose:
-            warn('MRO: Failed to find a valid solution for non-interacting community')
+            warn('MRO: Failed to find a valid solution for community')
         return None, None
 
     interacting_env = Environment.from_reactions(medium, max_uptake=max_uptake)

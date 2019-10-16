@@ -1,18 +1,16 @@
 #!/usr/bin/env python
 
-from __future__ import division
-from __future__ import print_function
 import argparse
 import textwrap
 import os
 import glob
 import pandas as pd
 from collections import OrderedDict
-from framed import Community, Environment, set_default_solver
-from framed.experimental.medium import load_media_db
+from reframed import Environment, set_default_solver
 from smetana import mip_score, mro_score, species_coupling_score, metabolite_production_score, metabolite_uptake_score, minimal_environment
 from random import sample
-from framed.io.cache import ModelCache
+from reframed.io.cache import ModelCache
+from smetana.legacy import Community
 
 
 def extract_id_from_filepath(filepath):
@@ -73,6 +71,15 @@ def load_communities(models, communities, other, flavor):
     return model_cache, comm_dict, other_models
 
 
+def load_media_db(filename, sep='\t', medium_col='medium', compound_col='compound'):
+    """ Load media library file. """
+
+    data = pd.read_csv(filename, sep=sep)
+    media_db = data[[medium_col, compound_col]].groupby(medium_col).agg(lambda x: list(x))
+
+    return media_db[compound_col].to_dict()
+
+
 def load_media(media, mediadb, exclude, other):
 
     media_db = None
@@ -106,7 +113,8 @@ def define_environment(medium, media_db, community, mode, verbose, min_mol_weigh
     max_uptake = 10.0 * len(community.organisms)
 
     if medium:
-        env = Environment.from_compounds(media_db[medium], exchange_format="'R_EX_M_{}_e_pool'", max_uptake=max_uptake)
+        fmt_func = lambda x: "R_EX_M_{}_e_pool".format(x)
+        env = Environment.from_compounds(media_db[medium], fmt_func=fmt_func, max_uptake=max_uptake)
         medium_id = medium
     elif mode == "global":
         env = Environment.complete(community.merged, max_uptake=max_uptake)
@@ -255,8 +263,6 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
 
     if len(inserted) < p:
         raise RuntimeError("Insufficient species ({}) to perform ({}) perturbations.".format(len(inserted), p))
-
-
 
     if n == 0:
         do_all = True

@@ -9,8 +9,8 @@ with open('README.rst') as readme_file:
     readme = readme_file.read()
 
 requirements = [
-    "framed>=0.5",
-    "pandas>=0.20.0"
+    "reframed>=1.0",
+    "pandas>=0.20"
 ]
 
 script_list = [
@@ -26,7 +26,6 @@ setup(
         'Environment :: Console', 
         'Intended Audience :: Science/Research',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.6',
         'License :: OSI Approved :: Apache Software License',
     ],
