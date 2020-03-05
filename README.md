@@ -3,7 +3,6 @@
 [![Documentation Status](http://readthedocs.org/projects/smetana/badge/?version=latest)](http://smetana.readthedocs.io/en/latest/?badge=latest)
 [![Build Status](https://travis-ci.org/cdanielmachado/smetana.svg?branch=master)](https://travis-ci.org/cdanielmachado/smetana)
 
-
 ![SMETANA](logo_300px.png)
 
 
@@ -18,6 +17,7 @@ For more details please check: http://smetana.readthedocs.io/
 ### Installation
 
 Can be easily installed using **pip**:
+
 ```
 pip install smetana
 ```

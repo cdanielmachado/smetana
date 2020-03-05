@@ -405,6 +405,12 @@ class Community(object):
                         new_rxn.stoichiometry[m_id] = 1
                         organisms_biomass_metabolites[org_id] = m_id
 
+                        sink_rxn = CBReaction('Sink_biomass_{}'.format(org_id), reaction_type=ReactionType.SINK,
+                                              reversible=False)
+                        sink_rxn.stoichiometry = {m_id: -1}
+                        sink_rxn.lb = 0.0
+                        merged_model.add_reaction(sink_rxn)
+
                     self._organisms_reactions[org_id].append(new_rxn.id)
                     merged_model.add_reaction(new_rxn)
 
