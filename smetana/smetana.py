@@ -221,8 +221,13 @@ def mp_score(community, environment=None, abstol=1e-3):
             remaining = blocked
 
         for r_id in remaining:
+            sol = solver.solve(linear={r_id: 1}, minimize=False, get_values=False)
             cnm = exchange_rxns[r_id]
-            scores[org_id][cnm.original_metabolite] = 0
+
+            if sol.status == Status.OPTIMAL and sol.fobj > abstol:
+                scores[org_id][cnm.original_metabolite] = 1
+            else:
+                scores[org_id][cnm.original_metabolite] = 0
 
     return scores
 
