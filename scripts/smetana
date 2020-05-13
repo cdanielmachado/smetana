@@ -46,6 +46,8 @@ if __name__ == '__main__':
     mode.add_argument('-g', '--global', dest='global', action='store_true', help="Run global analysis with MIP/MRO (faster).")
     mode.add_argument('-d', '--detailed',  dest='smetana', action='store_true', help="Run detailed SMETANA analysis (slower).")
     mode.add_argument('-a', '--abiotic',  dest='abiotic', help="Test abiotic perturbations with given list of compounds.")
+    mode.add_argument('-a2', '--abiotic2',  dest='abiotic2', action='store_true',
+                      help="Test abiotic perturbations (removing compounds from media).")
     mode.add_argument('-b', '--biotic',  dest='biotic', help="Test biotic perturbations with given list of species.")
 
     parser.add_argument('-p', type=int, default=1, help="Number of components to perturb simultaneously (default: 1).")
@@ -73,6 +75,9 @@ if __name__ == '__main__':
     elif args.abiotic:
         mode = "abiotic"
         other = args.abiotic
+    elif args.abiotic2:
+        mode = "abiotic2"
+        other = None
     elif args.biotic:
         mode = "biotic"
         other = args.biotic

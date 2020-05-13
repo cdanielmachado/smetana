@@ -5,7 +5,7 @@ import glob
 import pandas as pd
 from collections import OrderedDict
 from reframed import Environment
-from .smetana import mip_score, mro_score, sc_score, mp_score, mu_score, minimal_environment
+from .smetana import mip_score, mro_score, sc_score, mp_score, mu_score, minimal_environment, random_environment
 from random import sample
 from reframed.io.cache import ModelCache
 from smetana.legacy import Community
@@ -114,6 +114,9 @@ def define_environment(medium, media_db, community, mode, verbose, min_mol_weigh
     elif mode == "global":
         env = Environment.complete(community.merged, max_uptake=max_uptake)
         medium_id = 'complete'
+    elif mode == "abiotic2":
+        env = random_environment(community, verbose=verbose, max_uptake=max_uptake)
+        medium_id = 'random'
     else:
         env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp,
                                   max_uptake=max_uptake)
@@ -214,7 +217,7 @@ def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min
 
 def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p,
                 ignore_coupling):
-    medium = set(env.get_compounds(format_str="'{}'[7:-7]"))
+    medium = set(env.get_compounds(fmt_func=lambda x: x[7:-7]))
     inserted = sorted(other_mets - (medium | excluded_mets))
 
     if len(inserted) < p:
@@ -243,7 +246,46 @@ def run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_
             new_compounds = list(medium) + sample(inserted, p)
             new_id = "{}_{}".format(medium_id, i + 1)
 
-        new_env = Environment.from_compounds(new_compounds, exchange_format="'R_EX_M_{}_e_pool'", max_uptake=max_uptake)
+        new_env = Environment.from_compounds(new_compounds, fmt_func=lambda x: f"R_EX_M_{x}_e_pool",
+                                             max_uptake=max_uptake)
+        entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight,
+                               ignore_coupling)
+        data.extend(entries)
+
+    return data
+
+
+def run_abiotic2(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight, n, p, ignore_coupling):
+    medium = set(env.get_compounds(fmt_func=lambda x: x[7:-7]))
+    removed = list(medium - excluded_mets)
+
+    if len(removed) < p:
+        raise RuntimeError("Insufficient compounds ({}) to perform ({}) perturbations.".format(len(removed), p))
+
+    max_uptake = 10.0 * len(community.organisms)
+
+    if n == 0:
+        do_all = True
+        n = len(removed)
+        if verbose:
+            print('Running {} systematic abiotic perturbations with 1 compound...'.format(n))
+    else:
+        do_all = False
+        if verbose:
+            print('Running {} random abiotic perturbations with {} compounds...'.format(n, p))
+
+    data = run_detailed(comm_id, community, medium_id, excluded_mets, env, False, min_mol_weight, ignore_coupling)
+
+    for i in range(n):
+        if do_all:
+            new_compounds = medium - {removed[i]}
+            new_id = "{}_{}".format(medium_id, removed[i])
+        else:
+            new_compounds = medium | set(sample(removed, p))
+            new_id = "{}_{}".format(medium_id, i + 1)
+
+        new_env = Environment.from_compounds(new_compounds, fmt_func=lambda x: f"R_EX_M_{x}_e_pool",
+                                             max_uptake=max_uptake)
         entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight,
                                ignore_coupling)
         data.extend(entries)
@@ -280,8 +322,7 @@ def run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_m
             new_id = "{}_{}".format(comm_id, i + 1)
 
         comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in new_species]
-        new_community = Community(comm_id, comm_models, copy_models=False, extracellular_compartment_id=ext_comp_id,
-                                  create_biomass=False)
+        new_community = Community(comm_id, comm_models, copy_models=False, create_biomass=False)
         entries = run_detailed(new_id, new_community, medium_id, excluded_mets, env, False, min_mol_weight,
                                ignore_coupling)
         data.extend(entries)
@@ -348,6 +389,10 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
             if mode == "abiotic":
                 entries = run_abiotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
                                       other_mets, n, p, ignore_coupling)
+
+            if mode == "abiotic2":
+                entries = run_abiotic2(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
+                                       n, p, ignore_coupling)
 
             if mode == "biotic":
                 entries = run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
