@@ -281,7 +281,7 @@ def run_abiotic2(comm_id, community, medium_id, excluded_mets, env, verbose, min
             new_compounds = medium - {removed[i]}
             new_id = "{}_{}".format(medium_id, removed[i])
         else:
-            new_compounds = medium | set(sample(removed, p))
+            new_compounds = medium - set(sample(removed, p))
             new_id = "{}_{}".format(medium_id, i + 1)
 
         new_env = Environment.from_compounds(new_compounds, fmt_func=lambda x: f"R_EX_M_{x}_e_pool",
