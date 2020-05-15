@@ -46,7 +46,7 @@ if __name__ == '__main__':
     mode.add_argument('-g', '--global', dest='global', action='store_true', help="Run global analysis with MIP/MRO (faster).")
     mode.add_argument('-d', '--detailed',  dest='smetana', action='store_true', help="Run detailed SMETANA analysis (slower).")
     mode.add_argument('-a', '--abiotic',  dest='abiotic', help="Test abiotic perturbations with given list of compounds.")
-    mode.add_argument('-a2', '--abiotic2',  dest='abiotic2', action='store_true',
+    mode.add_argument('-ar', '--abiotic-rm',  dest='abiotic_rm', action='store_true',
                       help="Test abiotic perturbations (removing compounds from media).")
     mode.add_argument('-b', '--biotic',  dest='biotic', help="Test biotic perturbations with given list of species.")
 
@@ -65,6 +65,7 @@ if __name__ == '__main__':
     parser.add_argument('--lp', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--exclude', help="List of compounds to exclude from calculations (e.g.: inorganic compounds).")
     parser.add_argument('--debug', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--rich', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--no-coupling', action='store_true', help="Don't compute species coupling scores.")
 
     args = parser.parse_args()
@@ -75,8 +76,8 @@ if __name__ == '__main__':
     elif args.abiotic:
         mode = "abiotic"
         other = args.abiotic
-    elif args.abiotic2:
-        mode = "abiotic2"
+    elif args.abiotic_rm:
+        mode = "abiotic-rm"
         other = None
     elif args.biotic:
         mode = "biotic"
@@ -95,6 +96,7 @@ if __name__ == '__main__':
         models=args.models,
         communities=args.communities,
         mode=mode,
+        rich=args.rich,
         output=args.output,
         flavor=args.flavor,
         media=args.media,
