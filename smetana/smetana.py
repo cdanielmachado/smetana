@@ -1,7 +1,7 @@
 from reframed import minimal_medium, solver_instance, Environment
 from reframed.solvers.solver import VarType
 from reframed.solvers.solution import Status
-from reframed.alpha.sampling import random_medium
+#from reframed.alpha.sampling import random_medium
 
 from collections import Counter
 from itertools import combinations, chain
@@ -391,16 +391,16 @@ def minimal_environment(community, direction=-1, min_mol_weight=False, min_growt
         return env
 
 
-def random_environment(community, min_growth=0.1, max_uptake=10, validate=False, verbose=True):
-
-    exch_reactions = set(community.merged.get_exchange_reactions())
-    ex_rxns = random_medium(community.merged, min_growth=min_growth, exchange_reactions=exch_reactions,
-                            validate=validate)
-
-    if ex_rxns is None:
-        if verbose:
-            warn('Failed to find a medium for interacting community.')
-        return None
-    else:
-        env = Environment.from_reactions(ex_rxns, max_uptake=max_uptake)
-        return env
+# def random_environment(community, min_growth=0.1, max_uptake=10, validate=False, verbose=True):
+#
+#     exch_reactions = set(community.merged.get_exchange_reactions())
+#     ex_rxns = random_medium(community.merged, min_growth=min_growth, exchange_reactions=exch_reactions,
+#                             validate=validate)
+#
+#     if ex_rxns is None:
+#         if verbose:
+#             warn('Failed to find a medium for interacting community.')
+#         return None
+#     else:
+#         env = Environment.from_reactions(ex_rxns, max_uptake=max_uptake)
+#         return env

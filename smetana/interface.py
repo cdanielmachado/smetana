@@ -5,7 +5,7 @@ import glob
 import pandas as pd
 from collections import OrderedDict
 from reframed import Environment
-from .smetana import mip_score, mro_score, sc_score, mp_score, mu_score, minimal_environment, random_environment
+from .smetana import mip_score, mro_score, sc_score, mp_score, mu_score, minimal_environment
 from random import sample
 from reframed.io.cache import ModelCache
 from smetana.legacy import Community
@@ -104,7 +104,7 @@ def load_media(media, mediadb, exclude, other):
     return media, media_db, excluded_mets, other_mets
 
 
-def define_environment(medium, media_db, community, mode, rich, verbose, min_mol_weight, use_lp):
+def define_environment(medium, media_db, community, mode, verbose, min_mol_weight, use_lp):
     max_uptake = 10.0 * len(community.organisms)
 
     if medium:
@@ -114,9 +114,6 @@ def define_environment(medium, media_db, community, mode, rich, verbose, min_mol
     elif mode == "global":
         env = Environment.complete(community.merged, max_uptake=max_uptake)
         medium_id = 'complete'
-    elif mode == "abiotic-rm" or rich:
-        env = random_environment(community, verbose=verbose, max_uptake=max_uptake)
-        medium_id = 'random'
     else:
         env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp,
                                   max_uptake=max_uptake)
@@ -217,18 +214,22 @@ def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min
 
 def run_abiotic(comm_id, sense, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p,
                 ignore_coupling):
+
     medium = set(env.get_compounds(fmt_func=lambda x: x[7:-7]))
+    max_uptake = 10.0 * len(community.organisms)
 
     if sense == 'add':
         modified = sorted(other_mets - (medium | excluded_mets))
 
     if sense == 'rm':
-        modified = sorted(medium - excluded_mets)
+        modified = sorted(other_mets - (medium | excluded_mets))
+        n_extra_cpds = 2*p
+        modified = sample(modified, n_extra_cpds)
+        medium = medium | set(modified)
+        env = Environment.from_compounds(medium, fmt_func=lambda x: f"R_EX_M_{x}_e_pool",  max_uptake=max_uptake)
 
     if len(modified) < p:
         raise RuntimeError("Insufficient compounds ({}) to perform ({}) perturbations.".format(len(modified), p))
-
-    max_uptake = 10.0 * len(community.organisms)
 
     if n == 0:
         do_all = True
@@ -325,14 +326,14 @@ def export_results(mode, output, data, debug_data, zeros):
         df.to_csv(prefix + 'detailed.tsv', sep='\t', index=False)
 
 
-def main(models, communities=None, mode=None, rich=False, output=None, flavor=None, media=None, mediadb=None, zeros=False,
+def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
          verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
          other=None, n=1, p=1, ignore_coupling=False):
 
     other_models = other if mode == "biotic" else None
     model_cache, comm_dict, other_models = load_communities(models, communities, other_models, flavor)
 
-    other_mets = other if mode == "abiotic" else None
+    other_mets = other if mode == "abiotic" or mode == 'abiotic-rm' else None
     media, media_db, excluded_mets, other_mets = load_media(media, mediadb, exclude, other_mets)
 
     data = []
@@ -348,7 +349,7 @@ def main(models, communities=None, mode=None, rich=False, output=None, flavor=No
 
         for medium in media:
 
-            medium_id, env = define_environment(medium, media_db, community, mode, rich, verbose, min_mol_weight, use_lp)
+            medium_id, env = define_environment(medium, media_db, community, mode, verbose, min_mol_weight, use_lp)
 
             if mode == "global":
                 entries, debug_entries = run_global(comm_id, community, organisms, medium_id, excluded_mets, env,
@@ -364,7 +365,7 @@ def main(models, communities=None, mode=None, rich=False, output=None, flavor=No
 
             if mode == "abiotic-rm":
                 entries = run_abiotic(comm_id, 'rm', community, medium_id, excluded_mets, env, verbose, min_mol_weight,
-                                       None, n, p, ignore_coupling)
+                                       other_mets, n, p, ignore_coupling)
 
             if mode == "biotic":
                 entries = run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,
