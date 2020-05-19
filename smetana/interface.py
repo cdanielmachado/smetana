@@ -9,6 +9,7 @@ from .smetana import mip_score, mro_score, sc_score, mp_score, mu_score, minimal
 from random import sample
 from reframed.io.cache import ModelCache
 from smetana.legacy import Community
+from math import inf
 
 
 def extract_id_from_filepath(filepath):
@@ -104,7 +105,7 @@ def load_media(media, mediadb, exclude, other):
     return media, media_db, excluded_mets, other_mets
 
 
-def define_environment(medium, media_db, community, mode, verbose, min_mol_weight, use_lp):
+def define_environment(medium, media_db, community, mode, aerobic, verbose, min_mol_weight, use_lp):
     max_uptake = 10.0 * len(community.organisms)
 
     if medium:
@@ -114,9 +115,16 @@ def define_environment(medium, media_db, community, mode, verbose, min_mol_weigh
     elif mode == "global":
         env = Environment.complete(community.merged, max_uptake=max_uptake)
         medium_id = 'complete'
+
+        if aerobic is not None and aerobic:
+            env["R_EX_M_o2_e_pool"] = (-max_uptake, inf)
+
+        if aerobic is not None and not aerobic:
+            env["R_EX_M_o2_e_pool"] = (0, inf)
+
     else:
-        env = minimal_environment(community, verbose=verbose, min_mol_weight=min_mol_weight, use_lp=use_lp,
-                                  max_uptake=max_uptake)
+        env = minimal_environment(community, aerobic, verbose=verbose, min_mol_weight=min_mol_weight,
+                                  use_lp=use_lp, max_uptake=max_uptake)
         medium_id = "minimal"
 
     return medium_id, env
@@ -326,8 +334,8 @@ def export_results(mode, output, data, debug_data, zeros):
         df.to_csv(prefix + 'detailed.tsv', sep='\t', index=False)
 
 
-def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, zeros=False,
-         verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
+def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, aerobic=None,
+         zeros=False,verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
          other=None, n=1, p=1, ignore_coupling=False):
 
     other_models = other if mode == "biotic" else None
@@ -349,7 +357,7 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
         for medium in media:
 
-            medium_id, env = define_environment(medium, media_db, community, mode, verbose, min_mol_weight, use_lp)
+            medium_id, env = define_environment(medium, media_db, community, mode, aerobic, verbose, min_mol_weight, use_lp)
 
             if mode == "global":
                 entries, debug_entries = run_global(comm_id, community, organisms, medium_id, excluded_mets, env,

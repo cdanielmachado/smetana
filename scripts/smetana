@@ -42,6 +42,10 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--media', dest='media', help="Run SMETANA for given media (comma-separated).")
     parser.add_argument('--mediadb', help="Media database file")
 
+    oxygen = parser.add_mutually_exclusive_group()
+    oxygen.add_argument('--aerobic', action='store_true', help="Simulate an aerobic environment.")
+    oxygen.add_argument('--anaerobic', action='store_true', help="Simulate an anaerobic environment.")
+
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('-g', '--global', dest='global', action='store_true', help="Run global analysis with MIP/MRO (faster).")
     mode.add_argument('-d', '--detailed',  dest='smetana', action='store_true', help="Run detailed SMETANA analysis (slower).")
@@ -84,6 +88,12 @@ if __name__ == '__main__':
         mode = "global"
         other = None
 
+    aerobic = None
+    if args.aerobic:
+        aerobic = True
+    if args.anaerobic:
+        aerobic = False
+
     if args.debug and mode != "global":
         parser.error('For the moment --debug is only available in global mode.')
 
@@ -98,6 +108,7 @@ if __name__ == '__main__':
         flavor=args.flavor,
         media=args.media,
         mediadb=args.mediadb,
+        aerobic=aerobic,
         zeros=args.zeros,
         verbose=args.verbose,
         min_mol_weight=args.molweight,
