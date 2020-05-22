@@ -93,7 +93,6 @@ def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbo
                 scores[org_id] = None
 
         else:
-
             sols = solver.solve(objective, minimize=True, get_values=list(objective.keys()),
                                 pool_size=n_solutions, pool_gap=0.5)
             solver.remove_constraint('SMETANA_Biomass')
@@ -377,6 +376,9 @@ def minimal_environment(community, aerobic=None, min_mol_weight=False, min_growt
 
     exch_reactions = set(community.merged.get_exchange_reactions())
 
+    exch_reactions -= {"R_EX_M_h2o_e_pool"}
+    community.merged.set_flux_bounds("R_EX_M_h2o_e_pool", -inf, inf)
+
     if aerobic is not None:
         exch_reactions -= {"R_EX_M_o2_e_pool"}
         if aerobic:
@@ -396,4 +398,5 @@ def minimal_environment(community, aerobic=None, min_mol_weight=False, min_growt
         if aerobic is not None and aerobic:
             ex_rxns |= {"R_EX_M_o2_e_pool"}
         env = Environment.from_reactions(ex_rxns, max_uptake=max_uptake)
+        env["R_EX_M_h2o_e_pool"] = (-inf, inf)
         return env
