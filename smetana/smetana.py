@@ -43,7 +43,7 @@ def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbo
 
     solver.update()
 
-    bigM = 100
+    bigM = 1000
     for org_id, rxns in community.organisms_reactions.items():
         org_var = 'y_{}'.format(org_id)
         for r_id in rxns:
@@ -134,8 +134,8 @@ def mu_score(community, environment=None, min_mol_weight=False, min_growth=0.1, 
     if environment:
         environment.apply(community.merged, inplace=True, warning=False)
 
+    max_uptake = max_uptake * len(community.organisms)
     scores = {}
-
     solver = solver_instance(community.merged)
 
     for org_id in community.organisms:
