@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-requirements = ["reframed", "pandas"]
+requirements = ["reframed>=1.6.0", "pandas>=2.0.0"]
 
 test_requirements = requirements + ['cplex']
 
@@ -25,7 +25,11 @@ setup(
         'Environment :: Console', 
         'Intended Audience :: Science/Research',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'License :: OSI Approved :: Apache Software License',
     ],
     description="Species METabolic interaction ANAlysis (SMETANA) is a python-based command line tool to analyse microbial communities.",
@@ -41,6 +45,6 @@ setup(
     packages=find_packages(include=['smetana']),
     setup_requires=['setuptools_scm'],
     url='https://github.com/cdanielmachado/smetana',
-    version='1.2.0',
+    version='1.2.1',
     zip_safe=False,
 )

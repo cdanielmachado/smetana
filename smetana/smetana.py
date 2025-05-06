@@ -8,8 +8,7 @@ from warnings import warn
 from math import isinf, inf
 
 
-def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6,
-             use_pool=True):
+def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6, use_pool=False):
     """
     Calculate frequency of community species dependency on each other
 
@@ -39,7 +38,7 @@ def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbo
 
     for org_id in community.organisms:
         org_var = 'y_{}'.format(org_id)
-        solver.add_variable(org_var, 0, 1, vartype=VarType.BINARY, update=False)
+        solver.add_variable(org_var, 0, 1, vartype=VarType.BINARY)
 
     solver.update()
 
@@ -49,8 +48,8 @@ def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbo
         for r_id in rxns:
             if r_id == community.organisms_biomass_reactions[org_id]:
                 continue
-            solver.add_constraint('c_{}_lb'.format(r_id), {r_id: 1, org_var: bigM}, '>', 0, update=False)
-            solver.add_constraint('c_{}_ub'.format(r_id), {r_id: 1, org_var: -bigM}, '<', 0, update=False)
+            solver.add_constraint('c_{}_lb'.format(r_id), {r_id: 1, org_var: bigM}, '>', 0)
+            solver.add_constraint('c_{}_ub'.format(r_id), {r_id: 1, org_var: -bigM}, '<', 0)
 
     solver.update()
 
@@ -81,7 +80,8 @@ def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbo
                 previous_sol = {"y_{}".format(o): 1 for o in donors}
                 solver.add_constraint(previous_con, previous_sol, '<', len(previous_sol) - 1)
 
-            solver.remove_constraints(['SMETANA_Biomass'] + previous_constraints)
+            for constr_id in ['SMETANA_Biomass'] + previous_constraints:
+                solver.remove_constraint(constr_id)
 
             if not failed:
                 donors_list_n = float(len(donors_list))
@@ -146,7 +146,7 @@ def mu_score(community, environment=None, min_mol_weight=False, min_growth=0.1, 
         medium_list, sols = minimal_medium(community.merged, exchange_reactions=list(exchange_rxns.keys()),
                                            min_mass_weight=min_mol_weight, min_growth=min_growth,
                                            n_solutions=n_solutions, max_uptake=max_uptake, validate=validate,
-                                           abstol=abstol, use_pool=True, pool_gap=pool_gap, solver=solver,
+                                           abstol=abstol, use_pool=False, pool_gap=pool_gap, solver=solver,
                                            warnings=False)
 
         if medium_list:
@@ -202,7 +202,7 @@ def mp_score(community, environment=None, abstol=1e-3):
         remaining = [r_id for r_id, cnm in exchange_rxns.items() if cnm.original_metabolite not in env_compounds]
 
         while len(remaining) > 0:
-            sol = solver.solve(linear={r_id: 1 for r_id in remaining}, minimize=False, get_values=remaining)
+            sol = solver.solve(objective={r_id: 1 for r_id in remaining}, minimize=False, get_values=remaining)
 
             if sol.status != Status.OPTIMAL:
                 break
@@ -220,7 +220,7 @@ def mp_score(community, environment=None, abstol=1e-3):
             remaining = blocked
 
         for r_id in remaining:
-            sol = solver.solve(linear={r_id: 1}, minimize=False, get_values=False)
+            sol = solver.solve(objective={r_id: 1}, minimize=False, get_values=False)
             cnm = exchange_rxns[r_id]
 
             if sol.status == Status.OPTIMAL and sol.fobj > abstol:

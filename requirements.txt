@@ -1,4 +1,4 @@
-reframed>=1.0
-pandas>=0.20
+reframed>=1.6.0
+pandas>=2.0.0
 
 
